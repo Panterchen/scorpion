@@ -25,6 +25,7 @@ static vector<vector<FactPair>> get_preconditions_by_operator(
     return preconditions_by_operator;
 }
 
+// TODO: adapt for conditional effects
 static vector<FactPair> get_postconditions(
     const OperatorProxy &op) {
     // Use map to obtain sorted postconditions.
@@ -44,6 +45,7 @@ static vector<FactPair> get_postconditions(
     return postconditions;
 }
 
+// TODO: adapt for conditional effects?
 static vector<vector<FactPair>> get_postconditions_by_operator(
     const OperatorsProxy &ops) {
     vector<vector<FactPair>> postconditions_by_operator;
@@ -54,6 +56,7 @@ static vector<vector<FactPair>> get_postconditions_by_operator(
     return postconditions_by_operator;
 }
 
+// TODO: adapt for conditional effects
 static int lookup_value(const vector<FactPair> &facts, int var) {
     assert(is_sorted(facts.begin(), facts.end()));
     for (const FactPair &fact : facts) {

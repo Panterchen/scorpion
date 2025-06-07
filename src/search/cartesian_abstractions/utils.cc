@@ -32,6 +32,7 @@ static bool operator_applicable(
     return true;
 }
 
+// TODO: maybe needs to be adapted for conditional effects?
 static bool operator_achieves_fact(
     const OperatorProxy &op, const FactProxy &fact) {
     for (EffectProxy effect : op.get_effects()) {
