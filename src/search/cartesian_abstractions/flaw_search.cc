@@ -182,24 +182,128 @@ static void add_split(vector<vector<Split>> &splits, Split &&new_split) {
 }
 
 static vector<int> get_unaffected_variables(
-    const OperatorProxy &op, int num_variables) {
+    const OperatorProxy &op, int num_variables,
+	const AbstractState &state) {
     vector<bool> affected(num_variables);
-    for (EffectProxy effect : op.get_effects()) {
-        FactPair fact = effect.get_fact().get_pair();
-        affected[fact.var] = true;
+	vector<bool> conditionally_affected(num_variables);
+    affected.assign(num_variables, false);
+    conditionally_affected.assign(num_variables, false);
+	for (EffectProxy effect : op.get_effects()) {
+		bool conds_always_satisfied = true; // check if effect has to be applied
+		for (const FactProxy &cond : effect.get_conditions()) {
+			if (!state.contains(cond.get_pair().var, cond.get_pair().value) ||
+                state.count(cond.get_pair().var) > 1) {
+                conds_always_satisfied = false;
+                break;
+            }
+		}
+		FactPair fact = effect.get_fact().get_pair();
+		if (conds_always_satisfied) { //If the conditions have to be satisfied in this state,
+			affected[fact.var] = true; // the effect is applied and the variable is affected.
+		} else { // the condition is not necessarily affected
+			conditionally_affected[fact.var] = true; // the variable is only conditionally affected.
+		}
     }
-    for (FactProxy precondition : op.get_preconditions()) {
-        FactPair fact = precondition.get_pair();
-        affected[fact.var] = true;
+	for (FactProxy precondition : op.get_preconditions()) {
+    	FactPair fact = precondition.get_pair();
+		if (!conditionally_affected[fact.var]) { // if the variable is not conditionally affected
+        	affected[fact.var] = true; // it is by the precondition.
+    	}
     }
-    vector<int> unaffected_vars;
+	vector<int> unaffected_vars;
     unaffected_vars.reserve(num_variables);
     for (int var = 0; var < num_variables; ++var) {
         if (!affected[var]) {
-            unaffected_vars.push_back(var);
+        	unaffected_vars.push_back(var);
         }
     }
     return unaffected_vars;
+}
+
+static void update_value_counts(const AbstractState &abs_state,
+								const vector<State> &deviation_states,
+    							const AbstractState &target_abs_state,
+								const OperatorProxy &op,
+								const vector<int> &unaffected_variables,
+								vector<vector<int>> &state_value_count,
+								vector<vector<int>> &cond_value_count,
+								vector<vector<vector<bool>>> &cond_value_wanted,
+								const vector<int> &domain_sizes) {
+    /*
+        For the transition (a, o, b) with the abstract state a = abs_state, operator o = op,
+        target b = target_abs_state, we iterate over all concrete states in deviation_states that are contained in a,
+        but their o-successor is not contained in b.
+        We check all variables that are not necessarily affected by the operator o in the abstract state a.
+        Either these variables are entirely unaffected by the operator o, or they are only conditionally affected.
+        In state_value_count, we count for each variable and each value in its domain how many deviating states have
+            this value if the variable is unaffected and if it its domain in abs_state can be split.
+        In cond_value_count, we count for each variable and value in its domain how many deviating states have this
+            value on the variable if the variable has a condition in the operator where the conditional effect
+            changes one of our unaffected variables.
+        In cond_value_wanted, we mark for each var / value pair where cond_value_count[var][value] > 0
+            which values are already in abs_state and that we also want to keep in the abstract state.
+            We use this to determine the wanted list for the split later in get_deviation_splits().
+    */
+	int num_vars = domain_sizes.size();
+	vector<vector<EffectProxy>> effects_by_variable; // store effects that possible affect each variable
+	state_value_count.clear(); // counter for deviations on unchanged facts
+	cond_value_count.clear(); // counter for deviations on condition facts
+	cond_value_wanted.clear(); // mark which values are wanted for conditions causing deviations
+	for (int var = 0; var < num_vars; ++var) {
+        state_value_count.emplace_back(domain_sizes[var], 0);
+        cond_value_count.emplace_back(domain_sizes[var], 0);
+        cond_value_wanted.emplace_back();
+        cond_value_wanted[var].reserve(domain_sizes[var]);
+        for (int i = 0; i < domain_sizes[var]; ++i) {
+            cond_value_wanted[var].emplace_back(domain_sizes[var], false);
+        }
+		effects_by_variable.emplace_back();
+    }
+	// find effects that are relevant for unaffected variables
+	for (int var : unaffected_variables) {
+		for (EffectProxy eff : op.get_effects()) {
+			if (eff.get_fact().get_variable().get_id() == var) {
+				effects_by_variable[var].push_back(eff);
+			}
+		}
+	}
+	for (const State &state : deviation_states) {
+		for (int var : unaffected_variables) {
+			int state_value = state[var].get_value();
+			if (abs_state.count(var) > 1) {		// if the variable can be split in the abstract state
+                state_value_count[var][state_value]++; // increase count for deviation on state value for var
+            }
+			for (auto eff : effects_by_variable[var]) {
+				bool value_in_target = target_abs_state.contains(var, state_value); // state value is in target
+				bool eff_in_target = target_abs_state.contains(var, eff.get_fact().get_value()); // eff in target
+				if (!value_in_target || !eff_in_target) {
+					// state value OR effect value is not in the target abstract state -> DEVIATION on this effect
+					// FIX: force condition (if eff in target) to be met or prevent it (if state val in target)
+                    for (auto condition : eff.get_conditions()) {
+                        const FactPair &cond_pair = condition.get_pair();
+                        int state_cond_value = state[cond_pair.var].get_value(); // state value on cond variable
+                        if (eff_in_target) { // if the effect is in the target, it has to be triggered in abs
+                            if (cond_pair.value != state_cond_value // if the condition is not met in the state
+                                && abs_state.contains(cond_pair.var, cond_pair.value)) { // but contained in abs
+                                // we want to force the variable to have the condition value instead of the state value
+                                cond_value_count[cond_pair.var][state_cond_value]++; // increase count for dev on cond
+                                cond_value_wanted[cond_pair.var][state_cond_value][cond_pair.value] = true;
+                            }
+                        } else if (cond_pair.value == state_cond_value // if the condition is met in the state
+                                   && abs_state.count(cond_pair.var) > 1) { // and the condition var can be split
+                            // the wanted values are all values except the current state value (prevent the condition)
+                            cond_value_count[cond_pair.var][state_cond_value]++;
+                            for (int val = 0; val < domain_sizes[cond_pair.var]; ++val) {
+                                if (val != state_cond_value && abs_state.contains(cond_pair.var, val)) {
+                                    cond_value_wanted[cond_pair.var][state_cond_value][val] = true;
+                                }
+                            }
+                        }
+                    }
+				}
+			}
+		}
+    }
 }
 
 struct FactPairHash {
@@ -213,12 +317,13 @@ struct FactPairHash {
 
 using CompactFactMap = phmap::flat_hash_map<FactPair, int, FactPairHash>;
 
-static void get_deviation_splits(
-    const AbstractState &abs_state,
-    const CompactFactMap &fact_count,
-    const AbstractState &target_abs_state,
-    const vector<int> &domain_sizes,
-    vector<vector<Split>> &splits) {
+static void get_deviation_splits(const AbstractState &abs_state,
+						const AbstractState &target_abs_state,
+						const vector<int> &domain_sizes,
+						const vector<vector<int>> &state_value_count,
+						const vector<vector<int>> &cond_value_count,
+						const vector<vector<vector<bool>>> &cond_value_wanted,
+						vector<vector<Split>> &splits) {
     /*
       For each fact in the concrete state that is not contained in the
       target abstract state, loop over all values in the domain of the
@@ -231,25 +336,48 @@ static void get_deviation_splits(
       (a, o, b). We distinguish three cases for each variable v:
 
       pre(o)[v] defined: no split possible since o is applicable in s.
-      pre(o)[v] undefined, eff(o)[v] defined: no split possible since regression adds whole domain.
+      pre(o)[v] undefined, uncond eff(o)[v] defined: no split possible since regression adds whole domain.
       pre(o)[v] and eff(o)[v] undefined: if s[v] \notin t[v], wanted = intersect(a[v], b[v]).
+            -> all v where state_value_count[v][s[v]] > 0 and s[v] \notin t[v]
+      pre(o)[v] undefined, cond eff(o)[v] defined: if s[v] \notin t[v], cond eff(o)[v] \in t[v],
+                                    for cond[w]: if cond[w] \not in s[w]: wanted = intersect(a[w], {cond[w]})
+      pre(o)[v] undefined, cond eff(o)[v] defined: if cond eff(o)[v] \notin t[v],
+                                    for cond[w]: if cond[w] \in s[w]: wanted = intersect(a[w], domain[w]\{s[w]})
+            -> all v where cond_value_count[v][s[v]] > 0
+                    wanted = {c | c \in domain[v] and cond_value_wanted[v][s[v]][c] == true}
+      state_value_count, cond_value_count, and cond_value_wanted are computed in update_value_counts().
     */
-    for (auto &[fact, count] : fact_count) {
-        assert(count > 0);
-        int var = fact.var;
-        if (!target_abs_state.contains(var, fact.value)) {
-            // Note: we could precompute the "wanted" vector, but not the split.
-            vector<int> wanted;
-            for (int value = 0; value < domain_sizes[var]; ++value) {
-                if (abs_state.contains(var, value) &&
-                    target_abs_state.contains(var, value)) {
-                    wanted.push_back(value);
+	int num_vars = domain_sizes.size();
+	for (int var = 0; var < num_vars; ++var) {
+		for (int val = 0; val < domain_sizes[var]; ++val) {
+            if (state_value_count[var][val] > 0 && !target_abs_state.contains(var, val)) {
+                // if the variable is not in the target abstract state, we can split it off
+                vector<int> wanted;
+                for (int value = 0; value < domain_sizes[var]; ++value) {
+                    if (abs_state.contains(var, value) &&
+                        target_abs_state.contains(var, value)) {
+                        wanted.push_back(value);
+                    }
+                }
+                if (!wanted.empty()) { // if there are wanted values, we can split off the variable
+                    add_split(splits, Split(abs_state.get_id(), var, val, move(wanted), state_value_count[var][val]));
                 }
             }
-            assert(!wanted.empty());
-            add_split(splits, Split(abs_state.get_id(), var, fact.value, move(wanted), count));
+            if (cond_value_count[var][val] > 0) {
+                vector<int> wanted;
+                for (int c_val = 0; c_val < domain_sizes[var]; ++c_val) {
+                    if (cond_value_wanted[var][val][c_val]) {
+                        wanted.push_back(c_val);
+                    }
+                }
+                if (!wanted.empty()) { // if there are wanted values, we can split off the variable
+                    add_split(splits, Split(
+                                  abs_state.get_id(), var, val,
+                                  move(wanted), cond_value_count[var][val]));
+                }
+            }
         }
-    }
+	}
 }
 
 // TODO: Add comment about split considering multiple transitions.
@@ -266,6 +394,7 @@ unique_ptr<Split> FlawSearch::create_split(
 
     vector<vector<Split>> splits(task_proxy.get_variables().size());
     for (auto &pair : get_f_optimal_transitions(abstract_state_id)) {
+        // go through f-optimal outgoing transitions
         int op_id = pair.first;
         const vector<int> &targets = pair.second;
         OperatorProxy op = task_proxy.get_operators()[op_id];
@@ -276,15 +405,13 @@ unique_ptr<Split> FlawSearch::create_split(
             states.push_back(state_registry->lookup_state(state_id));
             assert(abstract_state.includes(states.back()));
         }
-
         vector<bool> applicable(states.size(), true);
         for (FactPair fact : abstraction.get_preconditions(op_id)) {
             vector<int> state_value_count(domain_sizes[fact.var], 0);
             for (size_t i = 0; i < states.size(); ++i) {
                 const State &state = states[i];
                 int state_value = state[fact.var].get_value();
-                if (state_value != fact.value) {
-                    // Applicability flaw
+                if (state_value != fact.value) { // Applicability flaw
                     applicable[i] = false;
                     ++state_value_count[state_value];
                 }
@@ -298,11 +425,10 @@ unique_ptr<Split> FlawSearch::create_split(
                 }
             }
         }
-
         int num_vars = domain_sizes.size();
-        vector<int> unaffected_variables = get_unaffected_variables(op, num_vars);
+		vector<int> unaffected_variables = get_unaffected_variables(op, num_vars, abstract_state);
 
-        phmap::flat_hash_map<int, CompactFactMap> fact_count_by_target;
+        phmap::flat_hash_map<int, vector<State>> dev_states_by_target;
         for (size_t i = 0; i < states.size(); ++i) {
             if (!applicable[i]) {
                 continue;
@@ -323,24 +449,22 @@ unique_ptr<Split> FlawSearch::create_split(
                 } else {
                     // Deviation flaw
                     assert(target != get_abstract_state_id(succ_state));
-                    auto pos = fact_count_by_target.find(target);
-                    if (pos == fact_count_by_target.end()) {
-                        pos = fact_count_by_target.emplace_hint(
-                            pos, target, CompactFactMap{});
-                    }
-                    CompactFactMap &fact_count = pos->second;
-                    for (int var : unaffected_variables) {
-                        int state_value = state[var].get_value();
-                        ++fact_count[FactPair(var, state_value)];
-                    }
+                    dev_states_by_target[target].push_back(state);
                 }
             }
         }
-
-        for (const auto &[target, fact_count] : fact_count_by_target) {
-            get_deviation_splits(
-                abstract_state, fact_count,
-                abstraction.get_state(target), domain_sizes, splits);
+		// iterate over dev_states_by_target to find deviation splits
+		vector<vector<int>> state_value_count; // counts how many concrete states have a certain value for a var
+    	vector<vector<int>> cond_value_count; // counts how many times a cond effect is relevant for a value + var
+    	vector<vector<vector<bool>>> cond_value_wanted; // wanted values for deviations caused by conditional effects
+		for (auto &[target, dev_states] : dev_states_by_target) {
+			// update state_value_count, cond_value_count, cond_value_wanted, effects_by_variable
+			update_value_counts(abstract_state, dev_states, abstraction.get_state(target), op, unaffected_variables,
+								state_value_count, cond_value_count, cond_value_wanted, domain_sizes);
+			get_deviation_splits(
+                abstract_state, abstraction.get_state(target),
+                domain_sizes, state_value_count,
+                cond_value_count, cond_value_wanted, splits);
         }
     }
 
@@ -348,6 +472,9 @@ unique_ptr<Split> FlawSearch::create_split(
     for (auto &var_splits : splits) {
         num_splits += var_splits.size();
     }
+	if (num_splits == 0) {
+		return nullptr;
+	}
     if (log.is_at_least_debug()) {
         log << "Unique splits: " << num_splits << endl;
     }
@@ -356,7 +483,6 @@ unique_ptr<Split> FlawSearch::create_split(
     if (num_splits == 0) {
         return nullptr;
     }
-
     pick_split_timer.resume();
     Split split = split_selector.pick_split(abstract_state, move(splits), rng);
     pick_split_timer.stop();
@@ -476,8 +602,8 @@ FlawSearch::get_min_h_batch_split(const utils::CountdownTimer &cegar_timer) {
             }
         }
     }
-
     FlawedState flawed_state = get_flawed_state_with_min_h();
+
     auto search_status = SearchStatus::FAILED;
     if (flawed_state == FlawedState::no_state) {
         search_status = search_for_flaws(cegar_timer);
@@ -486,8 +612,9 @@ FlawSearch::get_min_h_batch_split(const utils::CountdownTimer &cegar_timer) {
         }
     }
 
-    if (search_status == TIMEOUT)
+    if (search_status == TIMEOUT) {
         return nullptr;
+	}
 
     if (search_status == FAILED) {
         // There are flaws to refine.
@@ -499,7 +626,6 @@ FlawSearch::get_min_h_batch_split(const utils::CountdownTimer &cegar_timer) {
 
         unique_ptr<Split> split;
         split = create_split(flawed_state.concrete_states, flawed_state.abs_id);
-
         if (!utils::extra_memory_padding_is_reserved()) {
             return nullptr;
         }
@@ -553,7 +679,6 @@ FlawSearch::FlawSearch(
 
 unique_ptr<Split> FlawSearch::get_split(const utils::CountdownTimer &cegar_timer) {
     unique_ptr<Split> split;
-
     switch (pick_flawed_abstract_state) {
     case PickFlawedAbstractState::FIRST:
     case PickFlawedAbstractState::RANDOM:

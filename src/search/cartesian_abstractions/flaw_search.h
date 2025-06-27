@@ -59,6 +59,11 @@ class FlawSearch {
     FlawedState last_refined_flawed_state;
     Cost best_flaw_h;
     FlawedStates flawed_states;
+    // store currently affected variables
+    std::vector<bool> aff_vars;
+    // store currently conditionally affected variables
+    std::vector<bool> cond_aff_vars;
+
 
     // Statistics
     int num_searches;

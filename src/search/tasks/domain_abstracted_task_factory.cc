@@ -41,9 +41,11 @@ DomainAbstractedTaskFactory::DomainAbstractedTaskFactory(
     if (task_properties::has_axioms(parent_proxy)) {
         ABORT("DomainAbstractedTask doesn't support axioms.");
     }
+    /*
     if (task_properties::has_conditional_effects(parent_proxy)) {
         ABORT("DomainAbstractedTask doesn't support conditional effects.");
     }
+    */
 
     initialize(*parent);
     for (const auto &pair : value_groups) {

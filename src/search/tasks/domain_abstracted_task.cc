@@ -80,9 +80,11 @@ DomainAbstractedTask::DomainAbstractedTask(
     if (parent->get_num_axioms() > 0) {
         ABORT("DomainAbstractedTask doesn't support axioms.");
     }
+    /*
     if (has_conditional_effects(*parent)) {
         ABORT("DomainAbstractedTask doesn't support conditional effects.");
     }
+    */
 }
 
 int DomainAbstractedTask::get_variable_domain_size(int var) const {

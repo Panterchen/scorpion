@@ -120,9 +120,7 @@ vector<CartesianHeuristicFunction> CostSaturation::generate_heuristic_functions(
     TaskProxy task_proxy(*task);
 
     task_properties::verify_no_axioms(task_proxy);
-    //task_properties::verify_no_conditional_effects(task_proxy);
-    // TODO: replace verify_no_conditional_effects with verify_conflict_free_conditional_effects (or similar name)
-    task_properties::verify_conflict_free_flat_conditional_effects(task_proxy);
+    // task_properties::verify_no_conditional_effects(task_proxy);
     reset(task_proxy);
 
     State initial_state = TaskProxy(*task).get_initial_state();

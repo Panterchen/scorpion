@@ -51,6 +51,7 @@ pair<CartesianSet, CartesianSet> AbstractState::split_domain(
     return make_pair(v1_cartesian_set, v2_cartesian_set);
 }
 
+//todo: adapt for conditional effects
 CartesianSet AbstractState::regress(const OperatorProxy &op) const {
     CartesianSet regression = cartesian_set;
     for (EffectProxy effect : op.get_effects()) {

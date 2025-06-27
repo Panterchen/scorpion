@@ -49,13 +49,6 @@ extern bool has_conditional_effects(TaskProxy task);
 */
 extern void verify_no_conditional_effects(TaskProxy task);
 
-/*
-  Report an error and exit with ExitCode::UNSUPPORTED if the task has
-  complex conditional effects. (only flat, conflict-free effects are supported)
-  Runtime: O(n), where n is the number of operators.
-*/
-extern void verify_conflict_free_flat_conditional_effects(TaskProxy task);
-
 extern std::vector<int> get_operator_costs(const TaskProxy &task_proxy);
 extern double get_average_operator_cost(TaskProxy task_proxy);
 extern int get_min_operator_cost(TaskProxy task_proxy);

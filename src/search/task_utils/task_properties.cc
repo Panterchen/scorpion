@@ -58,19 +58,6 @@ void verify_no_conditional_effects(TaskProxy task) {
     }
 }
 
-// TODO: add verification function for necessary conditional effects
-void verify_conflict_free_flat_conditional_effects(TaskProxy task) {
-    verify_no_conditional_effects(task);
-    vector<int> op_ids;
-    for (OperatorProxy op : task.get_operators()) {
-        for (EffectProxy effect : op.get_effects()) {
-            if (!effect.get_conditions().empty())
-                op_ids.push_back(op.get_id());
-        }
-    }
-
-}
-
 vector<int> get_operator_costs(const TaskProxy &task_proxy) {
     vector<int> costs;
     OperatorsProxy operators = task_proxy.get_operators();

@@ -196,7 +196,6 @@ void CEGAR::refinement_loop(bool is_landmark_subtask) {
         solution = shortest_paths->extract_solution(
             abstraction->get_initial_state().get_id(), abstraction->get_goals());
         find_trace_timer.stop();
-
         if (solution) {
             int new_abstract_solution_cost =
                 shortest_paths->get_32bit_goal_distance(abstraction->get_initial_state().get_id());
@@ -222,7 +221,6 @@ void CEGAR::refinement_loop(bool is_landmark_subtask) {
         }
         find_flaw_timer.stop();
 
-
         if (!utils::extra_memory_padding_is_reserved()) {
             log << "Reached memory limit in flaw search." << endl;
             break;
@@ -242,7 +240,6 @@ void CEGAR::refinement_loop(bool is_landmark_subtask) {
         int state_id = split->abstract_state_id;
         const AbstractState &abstract_state = abstraction->get_state(state_id);
         assert(!abstraction->get_goals().count(state_id));
-
         pair<int, int> new_state_ids = abstraction->refine(
             abstract_state, split->var_id, split->values);
         refine_timer.stop();
@@ -253,7 +250,6 @@ void CEGAR::refinement_loop(bool is_landmark_subtask) {
         shortest_paths->update_incrementally(
             *abstraction, state_id, new_state_ids.first, new_state_ids.second, split->var_id);
         update_goal_distances_timer.stop();
-
         if (log.is_at_least_verbose() &&
             abstraction->get_num_states() % 1000 == 0) {
             log << abstraction->get_num_states() << "/" << max_states << " states, "
@@ -268,6 +264,7 @@ void CEGAR::refinement_loop(bool is_landmark_subtask) {
         log << "Time for updating goal distances: " << update_goal_distances_timer << endl;
         log << "Number of refinements: " << abstraction->get_num_states() - 1 << endl;
     }
+
 }
 
 void CEGAR::dump_dot_graph() const {
