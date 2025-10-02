@@ -772,6 +772,11 @@ void TransitionRewirer::rewire_loop_c(
 void TransitionRewirer::rewire_loops(
     deque<Loops> &loops, deque<Transitions> &incoming, deque<Transitions> &outgoing,
     int v_id, const AbstractState &v1, const AbstractState &v2, int var) const {
+	Loops old_loops = move(loops[v_id]);
+    assert(loops[v_id].empty());
+    /* State v has been split into v1 and v2. Now for all self-loops
+       v->v we need to add one or two of the transitions v1->v1, v1->v2,
+       v2->v1 and v2->v2. */
     for (int op_id : old_loops) {
 		if (!has_conditional_effects(op_id)) {
 			int pre = get_precondition_value(op_id, var);
