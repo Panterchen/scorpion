@@ -600,8 +600,8 @@ void LandmarkFactoryHM::initialize(const TaskProxy &task_proxy) {
         log << "h^m landmarks m=" << m << endl;
     }
     if (!task_proxy.get_axioms().empty()) {
-        cerr << "h^m landmarks don't support axioms" << endl;
-        utils::exit_with(ExitCode::SEARCH_UNSUPPORTED);
+        //cerr << "h^m landmarks don't support axioms" << endl;
+        //utils::exit_with(ExitCode::SEARCH_UNSUPPORTED);
     }
     initialize_hm_table(task_proxy.get_variables());
     if (log.is_at_least_normal()) {

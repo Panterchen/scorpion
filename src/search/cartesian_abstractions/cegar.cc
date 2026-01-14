@@ -34,7 +34,7 @@ CEGAR::CEGAR(
               : INF),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
       transition_rewirer(
-          make_shared<TransitionRewirer>(task_proxy.get_operators())),
+          make_shared<TransitionRewirer>(task_proxy.get_operators(), task_proxy)),
       abstraction(make_unique<Abstraction>(
           task, transition_rewirer, transition_representation, log)),
       timer(max_time),
@@ -288,6 +288,8 @@ void CEGAR::dump_dot_graph() const {
     if (dot_graph_verbosity == DotGraphVerbosity::WRITE_TO_CONSOLE) {
         cout << create_dot_graph(task_proxy, *abstraction) << endl;
     } else if (dot_graph_verbosity == DotGraphVerbosity::WRITE_TO_FILE) {
+        cout << "Writing dot graph to file 'graph" << abstraction->get_num_states()
+            << ".dot'" << endl;
         write_to_file(
             "graph" + to_string(abstraction->get_num_states()) + ".dot",
             create_dot_graph(task_proxy, *abstraction));

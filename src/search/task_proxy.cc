@@ -67,3 +67,10 @@ State State::get_unregistered_successor(const OperatorProxy &op) const {
 const causal_graph::CausalGraph &TaskProxy::get_causal_graph() const {
     return causal_graph::get_causal_graph(task);
 }
+
+void State::dump() const {
+    std::cout << "State ID\n";
+    for (int i = 0; i < num_variables; ++i) {
+        std::cout << "Var " << i << " = " << (*values)[i] << "\n";
+    }
+}

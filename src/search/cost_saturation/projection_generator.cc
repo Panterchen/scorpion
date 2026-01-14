@@ -32,7 +32,7 @@ Abstractions ProjectionGenerator::generate_abstractions(
     utils::Timer patterns_timer;
     TaskProxy task_proxy(*task);
 
-    task_properties::verify_no_axioms(task_proxy);
+    // task_properties::verify_no_axioms(task_proxy);
 
     bool use_explicit = use_explicit_transitions(transition_type, task_proxy);
 
@@ -42,8 +42,6 @@ Abstractions ProjectionGenerator::generate_abstractions(
                "Use projections(..., transitions=explicit) or transitions=auto "
                "to build projections that support conditional effects."
             << endl;
-        utils::exit_with(utils::ExitCode::SEARCH_UNSUPPORTED);
-    }
 
     log << "Compute patterns" << endl;
     pattern_generator->set_dead_ends_store(dead_ends);
@@ -78,7 +76,7 @@ Abstractions ProjectionGenerator::generate_abstractions(
     utils::Timer pdbs_timer;
     shared_ptr<TaskInfo> task_info = make_shared<TaskInfo>(task_proxy);
     Abstractions abstractions;
-    task_properties::verify_no_axioms(task_proxy);
+    //task_properties::verify_no_axioms(task_proxy);
     for (const pdbs::Pattern &pattern : *patterns) {
         unique_ptr<Abstraction> projection;
         if (projections) {

@@ -45,18 +45,22 @@ struct Split {
     int abstract_state_id;
     int var_id;
     int value;
+    bool zero_split;
     std::vector<int> values;
 
     Split(
         int abstract_state_id, int var_id, int value, std::vector<int> &&values,
-        int count)
+        int count, bool zero_split = false)
         : count(count),
           abstract_state_id(abstract_state_id),
           var_id(var_id),
           value(value),
+          zero_split(zero_split),
           values(move(values)) {
-        assert(count >= 1);
+        assert(zero_split||count >= 1);
     }
+
+    bool is_zero_split() const;
 
     bool combine_with(Split &&other);
 

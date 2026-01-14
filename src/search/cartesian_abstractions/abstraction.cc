@@ -184,9 +184,10 @@ void Abstraction::initialize_trivial_abstraction(
 
 pair<int, int> Abstraction::refine(
     const AbstractState &state, int var, const vector<int> &wanted) {
-    if (log.is_at_least_debug())
+    if (log.is_at_least_debug()) {
         log << "Refine " << state << " for " << var << "=" << wanted << endl;
-
+        log << "Refine " << state.get_cartesian_set() << " for " << var << "=" << wanted << endl;
+    }
     int v_id = state.get_id();
     // Reuse state ID from obsolete parent to obtain consecutive IDs.
     int v1_id = v_id;

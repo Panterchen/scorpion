@@ -11,9 +11,13 @@
 
 struct FactPair;
 class OperatorsProxy;
+class TaskProxy;
 
 namespace cartesian_abstractions {
 class TransitionRewirer {
+
+    const TaskProxy &task;
+
     const std::vector<std::vector<FactPair>> preconditions_by_operator;
     const std::vector<std::vector<FactPair>> postconditions_by_operator;
 
@@ -28,9 +32,12 @@ class TransitionRewirer {
         std::deque<Transitions> &incoming, std::deque<Transitions> &outgoing,
         const AbstractStates &states, int v_id, const AbstractState &v1,
         const AbstractState &v2, int var) const;
+    int get_derived_value(const AbstractState &v, int op_id, int var) const;
+    bool check_derived_conflict(const AbstractState &v, int op_id, const AbstractState &w) const;
+    void enqueue(std::deque<std::pair<FactPair, bool>> &q, std::vector<bool> &seen_vars, FactPair fact, bool x) const;
 
 public:
-    explicit TransitionRewirer(const OperatorsProxy &ops);
+    explicit TransitionRewirer(const OperatorsProxy &ops, const TaskProxy &task);
 
     void rewire_transitions(
         std::deque<Transitions> &incoming, std::deque<Transitions> &outgoing,

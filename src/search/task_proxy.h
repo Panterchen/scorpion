@@ -162,6 +162,10 @@ public:
         return fact.value;
     }
 
+    int get_var_id() const {
+        return fact.var;
+    }
+
     FactPair get_pair() const {
         return fact;
     }
@@ -584,6 +588,7 @@ class State {
     const int_packer::IntPacker *state_packer;
     int num_variables;
 public:
+	void dump() const;
     using ItemType = FactProxy;
 
     // Construct a registered state with only packed data.

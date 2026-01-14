@@ -7,10 +7,13 @@
 #include "split_selector.h"
 #include "transition_system.h"
 #include "utils.h"
+#include "../state_registry.h"
+
 
 #include "../plugins/plugin.h"
 #include "../task_utils/successor_generator.h"
 #include "../task_utils/task_properties.h"
+#include "../task_proxy.h"
 #include "../utils/countdown_timer.h"
 #include "../utils/memory.h"
 #include "../utils/rng.h"
@@ -255,10 +258,12 @@ static void get_deviation_splits(
                 }
             }
             assert(!wanted.empty());
-            add_split(
-                splits,
-                Split(
-                    abs_state.get_id(), var, fact.value, move(wanted), count));
+            if (!wanted.empty()){
+                add_split(
+                    splits,
+                    Split(
+                        abs_state.get_id(), var, fact.value, move(wanted), count));
+            }
         }
     }
 }
@@ -274,7 +279,8 @@ unique_ptr<Split> FlawSearch::create_split(
         log << endl;
         log << "Create split for abstract state " << abstract_state_id
             << " and " << state_ids.size() << " concrete states." << endl;
-    }
+	}
+
 
     vector<vector<Split>> splits(task_proxy.get_variables().size());
     for (auto &pair : get_f_optimal_transitions(abstract_state_id)) {
@@ -304,6 +310,7 @@ unique_ptr<Split> FlawSearch::create_split(
             for (int value = 0; value < domain_sizes[fact.var]; ++value) {
                 if (state_value_count[value] > 0) {
                     assert(value != fact.value);
+                    cout << "WANTED fact value " << fact.value << endl;
                     add_split(
                         splits, Split(
                                     abstract_state_id, fact.var, value,
@@ -370,7 +377,12 @@ unique_ptr<Split> FlawSearch::create_split(
     compute_splits_timer.stop();
 
     if (num_splits == 0) {
-        return nullptr;
+        if (log.is_at_least_debug()) {
+            log << "No split found!" << endl;
+        }
+        // exit(0);
+        Split split = Split(0, 0, 0, {}, 0, true);
+        return  make_unique<Split>(move(split));
     }
 
     pick_split_timer.resume();
@@ -531,6 +543,10 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
         }
 
         if (split) {
+            if (split->is_zero_split()) {
+                log << "Ending cegar loop" << endl;
+                return nullptr;
+            }
             last_refined_flawed_state = move(flawed_state);
         } else {
             last_refined_flawed_state = FlawedState::no_state;
