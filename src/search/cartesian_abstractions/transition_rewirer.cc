@@ -234,7 +234,7 @@ void TransitionRewirer::rewire_outgoing_transitions(
         } else{
             // op can only start in v2.
             if (!derived_conflict_v2){
-                cout << "Adding transition from " << v2_id << " to " << w_id << " via op " << task.get_operators()[op_id].get_name() << endl;
+                // cout << "Adding transition from " << v2_id << " to " << w_id << " via op " << task.get_operators()[op_id].get_name() << endl;
                 add_transition(incoming, outgoing, v2_id, op_id, w_id);
             }
         }
@@ -441,7 +441,7 @@ bool TransitionRewirer::check_derived_conflict(const AbstractState &v, int op_id
                         if (unsat_body_atoms[r.get_id()] == 0) {
                             FactProxy head_atom = r.get_effects()[0].get_fact();
                             if (!w.contains(head_atom.get_var_id(), true)){
-                                cout << "Conflict found for derived variable " << head_atom.get_var_id() << " expected true in target state" << endl;
+                                //cout << "Conflict found for derived variable " << head_atom.get_var_id() << " expected true in target state" << endl;
                                 return true; // conflict found
                             } 
                             enqueue(fact_queue, seen_vars, head_atom.get_pair(), true);
@@ -463,7 +463,7 @@ bool TransitionRewirer::check_derived_conflict(const AbstractState &v, int op_id
                         unsat_axioms.insert(r.get_id());
                         if (supporting_axioms[head_id] == 0) {
                             if (!w.contains(head_id, false)) {
-                                cout << "Conflict found for derived variable " << head_id << " expected false in target state" << endl;
+                                //cout << "Conflict found for derived variable " << head_id << " expected false in target state" << endl;
                                 return true; // conflict found
                             } 
                             enqueue(fact_queue, seen_vars, head_atom.get_pair(), false);
@@ -518,10 +518,10 @@ void TransitionRewirer::rewire_loops(
 
         }
 
-        cout << "Rewiring loop for op " << task.get_operators()[op_id].get_name() << endl;
-        cout << "Precondition value: " << pre << ", Postcondition value: " << post << endl;
-        cout << "var " << var << " is " << (derived ? "derived" : "basic") << endl;
-        cout << "abstract state v1: " << v1.get_cartesian_set() << ", abstract state v2: " << v2.get_cartesian_set() << endl;
+        //cout << "Rewiring loop for op " << task.get_operators()[op_id].get_name() << endl;
+        //cout << "Precondition value: " << pre << ", Postcondition value: " << post << endl;
+        //cout << "var " << var << " is " << (derived ? "derived" : "basic") << endl;
+        //cout << "abstract state v1: " << v1.get_cartesian_set() << ", abstract state v2: " << v2.get_cartesian_set() << endl;
 
         if (pre == UNDEFINED) {
             // op has no precondition on var --> it must start in v1 and v2.

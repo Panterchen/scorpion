@@ -310,7 +310,7 @@ unique_ptr<Split> FlawSearch::create_split(
             for (int value = 0; value < domain_sizes[fact.var]; ++value) {
                 if (state_value_count[value] > 0) {
                     assert(value != fact.value);
-                    cout << "WANTED fact value " << fact.value << endl;
+                    // cout << "WANTED fact value " << fact.value << endl;
                     add_split(
                         splits, Split(
                                     abstract_state_id, fact.var, value,
