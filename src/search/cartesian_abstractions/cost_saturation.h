@@ -19,6 +19,8 @@ namespace cartesian_abstractions {
 class CartesianHeuristicFunction;
 enum class DotGraphVerbosity;
 class SubtaskGenerator;
+class ExtensionStrategyFactory;
+class RegressionStrategyFactory;
 
 /*
   Get subtasks from SubtaskGenerators, reduce their costs by wrapping
@@ -29,6 +31,8 @@ class SubtaskGenerator;
 */
 class CostSaturation {
     const std::vector<std::shared_ptr<SubtaskGenerator>> subtask_generators;
+    const std::shared_ptr<ExtensionStrategyFactory> extension_strategy_factory;
+    //const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
     const int max_states;
     const int max_transitions;
     const double max_time;
@@ -63,8 +67,9 @@ class CostSaturation {
 
 public:
     CostSaturation(
-        const std::vector<std::shared_ptr<SubtaskGenerator>>
-            &subtask_generators,
+        const std::vector<std::shared_ptr<SubtaskGenerator>> &subtask_generators,
+        const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
+        // const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
         int max_states, int max_transitions, double max_time,
         bool use_general_costs,
         PickFlawedAbstractState pick_flawed_abstract_state,

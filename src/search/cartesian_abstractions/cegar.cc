@@ -5,6 +5,8 @@
 #include "shortest_paths.h"
 #include "transition_system.h"
 #include "utils.h"
+#include "extension_strategy_factory.h"
+#include "regression_strategy_factory.h"
 
 #include "../task_utils/task_properties.h"
 #include "../tasks/domain_abstracted_task.h"
@@ -18,7 +20,10 @@ using namespace std;
 
 namespace cartesian_abstractions {
 CEGAR::CEGAR(
-    const shared_ptr<AbstractTask> &task, int max_states, int max_transitions,
+    const shared_ptr<AbstractTask> &task, 
+    const shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
+    //const shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
+    int max_states, int max_transitions,    
     double max_time, PickFlawedAbstractState pick_flawed_abstract_state,
     PickSplit pick_split, PickSplit tiebreak_split,
     int max_concrete_states_per_abstract_state, int max_state_expansions,
@@ -26,6 +31,8 @@ CEGAR::CEGAR(
     utils::RandomNumberGenerator &rng, utils::LogProxy &log,
     DotGraphVerbosity dot_graph_verbosity)
     : task_proxy(*task),
+      extension_strategy_factory(extension_strategy_factory),
+      //regression_strategy_factory(regression_strategy_factory),
       domain_sizes(get_domain_sizes(task_proxy)),
       max_states(max_states),
       max_stored_transitions(
@@ -34,7 +41,7 @@ CEGAR::CEGAR(
               : INF),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
       transition_rewirer(
-          make_shared<TransitionRewirer>(task_proxy.get_operators(), task_proxy)),
+          make_shared<TransitionRewirer>(task_proxy, extension_strategy_factory)),
       abstraction(make_unique<Abstraction>(
           task, transition_rewirer, transition_representation, log)),
       timer(max_time),

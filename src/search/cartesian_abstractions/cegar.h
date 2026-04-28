@@ -21,6 +21,8 @@ namespace cartesian_abstractions {
 class Abstraction;
 enum class DotGraphVerbosity;
 class ShortestPaths;
+class ExtensionStrategyFactory;
+class RegressionStrategyFactory;
 
 /*
   Iteratively refine a Cartesian abstraction with counterexample-guided
@@ -32,6 +34,8 @@ class ShortestPaths;
 */
 class CEGAR {
     const TaskProxy task_proxy;
+    const std::shared_ptr<ExtensionStrategyFactory> extension_strategy_factory;
+    //const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
     const std::vector<int> domain_sizes;
     const int max_states;
     const int max_stored_transitions;
@@ -71,7 +75,10 @@ class CEGAR {
 
 public:
     CEGAR(
-        const std::shared_ptr<AbstractTask> &task, int max_states,
+        const std::shared_ptr<AbstractTask> &task, 
+        const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
+        //const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory, 
+        int max_states,
         int max_transitions, double max_time,
         PickFlawedAbstractState pick_flawed_abstract_state,
         PickSplit pick_split, PickSplit tiebreak_split,

@@ -9,6 +9,8 @@
 #include "transition.h"
 #include "transition_system.h"
 #include "utils.h"
+#include "extension_strategy_factory.h"
+#include "regression_strategy_factory.h"
 
 #include "../task_utils/task_properties.h"
 #include "../tasks/modified_operator_costs_task.h"
@@ -73,7 +75,9 @@ vector<int> compute_saturated_costs(
 }
 
 CostSaturation::CostSaturation(
-    const vector<shared_ptr<SubtaskGenerator>> &subtask_generators,
+    const vector<shared_ptr<SubtaskGenerator>> &subtask_generators, 
+    const shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
+    //const shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
     int max_states, int max_transitions, double max_time,
     bool use_general_costs, PickFlawedAbstractState pick_flawed_abstract_state,
     PickSplit pick_split, PickSplit tiebreak_split,
@@ -82,6 +86,8 @@ CostSaturation::CostSaturation(
     utils::RandomNumberGenerator &rng, utils::LogProxy &log,
     DotGraphVerbosity dot_graph_verbosity)
     : subtask_generators(subtask_generators),
+      extension_strategy_factory(extension_strategy_factory),
+      //regression_strategy_factory(regression_strategy_factory),
       max_states(max_states),
       max_transitions(max_transitions),
       max_time(max_time),
@@ -227,7 +233,9 @@ void CostSaturation::build_abstractions(
 
         double time_limit = timer.get_remaining_time() / rem_subtasks;
         CEGAR cegar(
-            subtask, get_subtask_limit(max_states, num_states, rem_subtasks),
+            subtask, 
+            extension_strategy_factory, //regression_strategy_factory
+            get_subtask_limit(max_states, num_states, rem_subtasks),
             get_subtask_limit(max_transitions, num_transitions, rem_subtasks),
             time_limit, pick_flawed_abstract_state, pick_split, tiebreak_split,
             max_concrete_states_per_abstract_state, max_state_expansions,

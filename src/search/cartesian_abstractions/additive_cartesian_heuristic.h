@@ -8,6 +8,8 @@
 namespace cartesian_abstractions {
 class CartesianHeuristicFunction;
 class SubtaskGenerator;
+class ExtensionStrategyFactory;
+//class RegressionStrategyFactory;
 enum class DotGraphVerbosity;
 enum class PickFlawedAbstractState;
 enum class PickSplit;
@@ -26,6 +28,8 @@ protected:
 public:
     AdditiveCartesianHeuristic(
         const std::vector<std::shared_ptr<SubtaskGenerator>> &subtasks,
+        const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
+        //const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
         int max_states, int max_transitions, double max_time,
         PickFlawedAbstractState pick_flawed_abstract_state,
         PickSplit pick_split, PickSplit tiebreak_split,

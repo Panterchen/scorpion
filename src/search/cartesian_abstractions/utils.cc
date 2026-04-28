@@ -21,6 +21,8 @@ using namespace std;
 
 namespace cartesian_abstractions {
 class SubtaskGenerator;
+class ExtensionStrategyFactory;
+class RegressionStrategyFactory;
 bool g_hacked_sort_transitions = false;
 
 static bool operator_applicable(
@@ -186,6 +188,14 @@ void add_common_cegar_options(plugins::Feature &feature) {
     feature.add_list_option<shared_ptr<SubtaskGenerator>>(
         "subtasks", "subtask generators",
         "[landmarks(order=random), goals(order=random)]");
+    // Extension strategy option.
+    feature.add_option<shared_ptr<ExtensionStrategyFactory>>(
+        "extension_strategy",
+        "See detailed documentation for extension strategies.");
+    /*// Regression strategy option.
+    feature.add_option<shared_ptr<RegressionStrategyFactory>>(
+        "regression_strategy",
+        "See detailed documentation for regression strategies.");*/
     feature.add_option<int>(
         "max_states", "maximum sum of abstract states over all abstractions",
         "infinity", plugins::Bounds("1", "infinity"));
