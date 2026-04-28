@@ -882,6 +882,12 @@ create_fast_downward_library(
         cartesian_abstractions/cartesian_set
         cartesian_abstractions/cegar
         cartesian_abstractions/cost_saturation
+        cartesian_abstractions/extension_strategy_factory
+        cartesian_abstractions/extension_strategy_factory_uncertainty
+        cartesian_abstractions/extension_strategy_factory_naive
+        cartesian_abstractions/extension_strategy
+        cartesian_abstractions/extension_strategy_uncertainty
+        cartesian_abstractions/extension_strategy_naive
         cartesian_abstractions/flaw
         cartesian_abstractions/flaw_search
         cartesian_abstractions/match_tree
