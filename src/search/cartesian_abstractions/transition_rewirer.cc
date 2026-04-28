@@ -236,7 +236,7 @@ void TransitionRewirer::rewire_outgoing_transitions(
         } else{
             // op can only start in v2.
             if (!derived_conflict_v2){
-                // cout << "Adding transition from " << v2_id << " to " << w_id << " via op " << task.get_operators()[op_id].get_name() << endl;
+                //cout << "Adding transition from " << v2_id << " to " << w_id << " via op " << task.get_operators()[op_id].get_name() << endl;
                 add_transition(incoming, outgoing, v2_id, op_id, w_id);
             }
         }
