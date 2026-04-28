@@ -51,11 +51,6 @@ bool Split::combine_with(Split &&other) {
     }
 }
 
-bool Split::is_zero_split() const {
-        return zero_split;
-}
-
-
 SplitSelector::SplitSelector(
     const shared_ptr<AbstractTask> &task, PickSplit pick,
     PickSplit tiebreak_pick, bool debug)

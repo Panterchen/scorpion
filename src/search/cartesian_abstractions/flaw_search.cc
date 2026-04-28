@@ -228,7 +228,7 @@ using CompactFactMap = phmap::flat_hash_map<FactPair, int, FactPairHash>;
 static void get_deviation_splits(
     const AbstractState &abs_state, const CompactFactMap &fact_count,
     const AbstractState &target_abs_state, const vector<int> &domain_sizes,
-    vector<vector<Split>> &splits) {
+    vector<vector<Split>> &splits, TaskProxy &task) {
     /*
       For each fact in the concrete state that is not contained in the
       target abstract state, loop over all values in the domain of the
@@ -248,7 +248,7 @@ static void get_deviation_splits(
     for (auto &[fact, count] : fact_count) {
         assert(count > 0);
         int var = fact.var;
-        if (!target_abs_state.contains(var, fact.value)) {
+        if (!target_abs_state.contains(var, fact.value) && !task.get_variables()[var].is_derived()) {
             // Note: we could precompute the "wanted" vector, but not the split.
             vector<int> wanted;
             for (int value = 0; value < domain_sizes[var]; ++value) {
@@ -258,12 +258,8 @@ static void get_deviation_splits(
                 }
             }
             assert(!wanted.empty());
-            if (!wanted.empty()){
-                add_split(
-                    splits,
-                    Split(
-                        abs_state.get_id(), var, fact.value, move(wanted), count));
-            }
+            add_split(splits, Split(abs_state.get_id(), var, fact.value, move(wanted), count));
+            
         }
     }
 }
@@ -310,7 +306,7 @@ unique_ptr<Split> FlawSearch::create_split(
             for (int value = 0; value < domain_sizes[fact.var]; ++value) {
                 if (state_value_count[value] > 0) {
                     assert(value != fact.value);
-                    // cout << "WANTED fact value " << fact.value << endl;
+                    //cout << "WANTED fact value " << fact.value << endl;
                     add_split(
                         splits, Split(
                                     abstract_state_id, fact.var, value,
@@ -363,7 +359,7 @@ unique_ptr<Split> FlawSearch::create_split(
         for (const auto &[target, fact_count] : fact_count_by_target) {
             get_deviation_splits(
                 abstract_state, fact_count, abstraction.get_state(target),
-                domain_sizes, splits);
+                domain_sizes, splits, task_proxy);
         }
     }
 
@@ -377,12 +373,8 @@ unique_ptr<Split> FlawSearch::create_split(
     compute_splits_timer.stop();
 
     if (num_splits == 0) {
-        if (log.is_at_least_debug()) {
-            log << "No split found!" << endl;
-        }
-        // exit(0);
-        Split split = Split(0, 0, 0, {}, 0, true);
-        return  make_unique<Split>(move(split));
+        
+        return  nullptr;
     }
 
     pick_split_timer.resume();
@@ -518,6 +510,7 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
     FlawedState flawed_state = get_flawed_state_with_min_h();
     auto search_status = SearchStatus::FAILED;
     if (flawed_state == FlawedState::no_state) {
+        std::cout << "No flawed state with min h found, search for flaws again." << std::endl;
         search_status = search_for_flaws(cegar_timer);
         if (search_status == SearchStatus::FAILED) {
             flawed_state = get_flawed_state_with_min_h();
@@ -536,6 +529,7 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
         }
 
         unique_ptr<Split> split;
+
         split = create_split(flawed_state.concrete_states, flawed_state.abs_id);
 
         if (!utils::extra_memory_padding_is_reserved()) {
@@ -543,14 +537,12 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
         }
 
         if (split) {
-            if (split->is_zero_split()) {
-                log << "Ending cegar loop" << endl;
-                return nullptr;
-            }
             last_refined_flawed_state = move(flawed_state);
         } else {
             last_refined_flawed_state = FlawedState::no_state;
             // We selected an abstract state without any flaws, so we try again.
+            // TODO: why does it not result in an endless loop whitout axioms but with axioms it does?
+            // if the following line is not commented out and we have axioms, we get an endless loop for the pick_flawed_abstract_state=batch_min_h option
             return get_min_h_batch_split(cegar_timer);
         }
 

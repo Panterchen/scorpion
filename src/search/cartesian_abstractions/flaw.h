@@ -36,10 +36,12 @@ struct FlawedState {
     }
 
     friend std::ostream &operator<<(std::ostream &os, const FlawedState &s) {
+        // TODO: Additional output, can be removed?
         for (const StateID& id : s.concrete_states) {
             // use 'id' here
             std::cout << id << '\n';
         }
+        
         return os << "id=" << s.abs_id << ", h=" << s.h
                   << ", states=" << s.concrete_states.size();
     }
