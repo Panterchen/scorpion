@@ -5,6 +5,8 @@
 #include "split_selector.h"
 #include "transition_rewirer.h"
 #include "types.h"
+#include "regression_strategy.h"
+#include "regression_strategy_factory.h"
 
 #include "../task_proxy.h"
 
@@ -35,7 +37,7 @@ class RegressionStrategyFactory;
 class CEGAR {
     const TaskProxy task_proxy;
     const std::shared_ptr<ExtensionStrategyFactory> extension_strategy_factory;
-    //const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
+    const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
     const std::vector<int> domain_sizes;
     const int max_states;
     const int max_stored_transitions;
@@ -77,7 +79,7 @@ public:
     CEGAR(
         const std::shared_ptr<AbstractTask> &task, 
         const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
-        //const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory, 
+        const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
         int max_states,
         int max_transitions, double max_time,
         PickFlawedAbstractState pick_flawed_abstract_state,

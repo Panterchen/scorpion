@@ -5,6 +5,8 @@
 #include "flaw.h"
 #include "shortest_paths.h"
 #include "split_selector.h"
+#include "regression_strategy.h"
+#include "regression_strategy_factory.h"
 #include "transition_system.h"
 #include "utils.h"
 #include "../state_registry.h"
@@ -228,7 +230,7 @@ using CompactFactMap = phmap::flat_hash_map<FactPair, int, FactPairHash>;
 static void get_deviation_splits(
     const AbstractState &abs_state, const CompactFactMap &fact_count,
     const AbstractState &target_abs_state, const vector<int> &domain_sizes,
-    vector<vector<Split>> &splits, TaskProxy &task) {
+    vector<vector<Split>> &splits, int op_id, RegressionStrategy &regression_strategy) {
     /*
       For each fact in the concrete state that is not contained in the
       target abstract state, loop over all values in the domain of the
@@ -238,27 +240,44 @@ static void get_deviation_splits(
       deviation flaws. Here, we consider deviation flaws.
 
       Let the desired abstract transition be (a, o, t) and the deviation be
-      (a, o, b). We distinguish three cases for each variable v:
+      (a, o, b). We distinguish three cases for each basic variable v:
 
       pre(o)[v] defined: no split possible since o is applicable in s.
       pre(o)[v] undefined, eff(o)[v] defined: no split possible since regression
-      adds whole domain. pre(o)[v] and eff(o)[v] undefined: if s[v] \notin t[v],
+      adds whole domain.
+      pre(o)[v] and eff(o)[v] undefined: if s[v] \notin t[v],
       wanted = intersect(a[v], b[v]).
+
+      For derived variables v we distinguish two cases (in naive regression):
+      pre(o)[v] defined: no split possible since o is applicable in s.
+      else: regr(t, o)[v] is approximated as the entire domain of v, so
+      wanted = intersect(a[v], domain(v)) = a[v]
     */
     for (auto &[fact, count] : fact_count) {
         assert(count > 0);
         int var = fact.var;
-        if (!target_abs_state.contains(var, fact.value) && !task.get_variables()[var].is_derived()) {
+        if (!target_abs_state.contains(var, fact.value)
+            // && !task.get_variables()[var].is_derived()
+            ) {
             // Note: we could precompute the "wanted" vector, but not the split.
-            vector<int> wanted;
-            for (int value = 0; value < domain_sizes[var]; ++value) {
-                if (abs_state.contains(var, value) &&
-                    target_abs_state.contains(var, value)) {
-                    wanted.push_back(value);
-                }
-            }
+            vector<int> wanted = regression_strategy.get_wanted_values(abs_state, target_abs_state, var, op_id);
+            // for (int value = 0; value < domain_sizes[var]; ++value) {
+            //     if (abs_state.contains(var, value) &&
+            //         target_abs_state.contains(var, value)) {
+            //         wanted.push_back(value);
+            //     }
+            // }
+            /* For derived variables, it can happen that the wanted vector is not
+             * empty, but that it contains a single value and that this is the
+             * only value in the abstract state 'a' we want to split. So we skip
+             * derived variables with non-empty wanted vectors where |a[v]| = 1
+            */
             assert(!wanted.empty());
-            add_split(splits, Split(abs_state.get_id(), var, fact.value, move(wanted), count));
+            if (wanted.size() < static_cast<size_t>(abs_state.get_cartesian_set().count(var))) {
+                add_split(splits, Split(abs_state.get_id(), var, fact.value,
+                                        move(wanted), count));
+            }
+            //add_split(splits, Split(abs_state.get_id(), var, fact.value, move(wanted), count));
             
         }
     }
@@ -359,7 +378,9 @@ unique_ptr<Split> FlawSearch::create_split(
         for (const auto &[target, fact_count] : fact_count_by_target) {
             get_deviation_splits(
                 abstract_state, fact_count, abstraction.get_state(target),
-                domain_sizes, splits, task_proxy);
+                domain_sizes, splits,
+                // task_proxy,
+                op_id, *regression_strategy);
         }
     }
 
@@ -492,13 +513,15 @@ FlawedState FlawSearch::get_flawed_state_with_min_h() {
 unique_ptr<Split> FlawSearch::get_min_h_batch_split(
     const utils::CountdownTimer &cegar_timer) {
     assert(pick_flawed_abstract_state == PickFlawedAbstractState::BATCH_MIN_H);
+
+    // Recycle flaws of the last refined abstract state: re-evaluate all
+    // concrete states that were in the last refined abstract state and
+    // add them back to flawed_states if their h-value is unchanged.
     if (last_refined_flawed_state != FlawedState::no_state) {
-        // Recycle flaws of the last refined abstract state.
         Cost old_h = last_refined_flawed_state.h;
         for (const StateID &state_id :
              last_refined_flawed_state.concrete_states) {
             State state = state_registry->lookup_state(state_id);
-            // We only add non-goal states to flawed_states.
             assert(!task_properties::is_goal_state(task_proxy, state));
             int abs_id = get_abstract_state_id(state);
             if (get_h_value(abs_id) == old_h) {
@@ -507,50 +530,156 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
         }
     }
 
-    FlawedState flawed_state = get_flawed_state_with_min_h();
-    auto search_status = SearchStatus::FAILED;
-    if (flawed_state == FlawedState::no_state) {
-        std::cout << "No flawed state with min h found, search for flaws again." << std::endl;
-        search_status = search_for_flaws(cegar_timer);
-        if (search_status == SearchStatus::FAILED) {
+    // Tracks abstract states for which create_split returned nullptr in
+    // this round (i.e. no valid split could be found despite a flaw existing).
+    // This happens with axioms when all split candidates are derived variables
+    // whose wanted vectors are degenerate, i.e. the wanted vector equals the
+    // current variable domain of the abstract state (naive regression).
+    // For tasks without derived variables, this set always stays empty.
+    // The set is reset after each call to search_for_flaws since the
+    // flawed_states collection is freshly populated at that point.
+    std::unordered_set<int> unsplittable_abstract_states;
+
+    while (true) {
+        // Try to get the next flawed abstract state with minimum h-value
+        // from the current collection without running a new flaw search.
+        FlawedState flawed_state = get_flawed_state_with_min_h();
+
+        if (flawed_state == FlawedState::no_state) {
+            // If we exhausted flawed_states and already encountered
+            // unsplittable states this round, running search_for_flaws again
+            // would find the same flaws since nothing has been refined —
+            // this would cause an infinite loop. Return nullptr and let
+            // the caller trigger a new refinement cycle.
+            if (!unsplittable_abstract_states.empty()) {
+                last_refined_flawed_state = FlawedState::no_state;
+                return nullptr;
+            }
+
+            // flawed_states is empty and no unsplittable states were seen
+            // this round — run a fresh flaw search to find new flaws.
+            if (log.is_at_least_debug()) {
+                log << "No flawed state with min h found, search for flaws again." << endl;
+            }
+            SearchStatus search_status = search_for_flaws(cegar_timer);
+
+            if (search_status == SearchStatus::TIMEOUT)
+                return nullptr;
+
+            if (search_status == SearchStatus::SOLVED)
+                return nullptr;
+
+            // Flaw search found flaws (FAILED status). Clear the unsplittable
+            // set since we are starting a new round with a freshly populated
+            // flawed_states — previously unsplittable states may now be
+            // splittable after refinements elsewhere.
+            unsplittable_abstract_states.clear();
+
+            // Try to get a flawed state from the freshly populated set.
+            // Can still return no_state if all found states have stale
+            // h-values (get_flawed_state_with_min_h discards states whose
+            // h-value has increased). Return nullptr and let the caller
+            // handle the next cycle.
             flawed_state = get_flawed_state_with_min_h();
+            if (flawed_state == FlawedState::no_state)
+                return nullptr;
         }
-    }
 
-    if (search_status == TIMEOUT)
-        return nullptr;
-
-    if (search_status == FAILED) {
-        // There are flaws to refine.
-        assert(flawed_state != FlawedState::no_state);
+        // Skip abstract states that already failed to produce a split in
+        // this round — they will not improve without a refinement step.
+        // Re-pop from flawed_states by continuing the loop.
+        if (unsplittable_abstract_states.count(flawed_state.abs_id)) {
+            continue;
+        }
 
         if (log.is_at_least_debug()) {
             log << "Use flawed state: " << flawed_state << endl;
         }
 
-        unique_ptr<Split> split;
-
-        split = create_split(flawed_state.concrete_states, flawed_state.abs_id);
+        unique_ptr<Split> split =
+            create_split(flawed_state.concrete_states, flawed_state.abs_id);
 
         if (!utils::extra_memory_padding_is_reserved()) {
             return nullptr;
         }
 
         if (split) {
+            // Valid split found — store the refined state for recycling
+            // on the next call and return the split to the caller.
             last_refined_flawed_state = move(flawed_state);
+            return split;
         } else {
+            // create_split returned nullptr — no valid split could be found
+            // for this abstract state despite a flaw existing. Mark it as
+            // unsplittable for this round and try the next flawed state.
+            unsplittable_abstract_states.insert(flawed_state.abs_id);
             last_refined_flawed_state = FlawedState::no_state;
-            // We selected an abstract state without any flaws, so we try again.
-            // TODO: why does it not result in an endless loop whitout axioms but with axioms it does?
-            // if the following line is not commented out and we have axioms, we get an endless loop for the pick_flawed_abstract_state=batch_min_h option
-            return get_min_h_batch_split(cegar_timer);
         }
-
-        return split;
     }
-
-    assert(search_status == SOLVED);
-    return nullptr;
+     /* TODO remove if version above is sound.
+      * Old version for tasks without derived variables. should be functionally
+      * identical in the non-derived cases compared to the new one, but kept
+      * until extensive testing is complete
+      */
+    // if (last_refined_flawed_state != FlawedState::no_state) {
+    //     // Recycle flaws of the last refined abstract state.
+    //     Cost old_h = last_refined_flawed_state.h;
+    //     for (const StateID &state_id :
+    //          last_refined_flawed_state.concrete_states) {
+    //         State state = state_registry->lookup_state(state_id);
+    //         // We only add non-goal states to flawed_states.
+    //         assert(!task_properties::is_goal_state(task_proxy, state));
+    //         int abs_id = get_abstract_state_id(state);
+    //         if (get_h_value(abs_id) == old_h) {
+    //             add_flaw(abs_id, state);
+    //         }
+    //     }
+    // }
+    //
+    // FlawedState flawed_state = get_flawed_state_with_min_h();
+    // auto search_status = SearchStatus::FAILED;
+    // if (flawed_state == FlawedState::no_state) {
+    //     std::cout << "No flawed state with min h found, search for flaws again." << std::endl;
+    //     search_status = search_for_flaws(cegar_timer);
+    //     if (search_status == SearchStatus::FAILED) {
+    //         flawed_state = get_flawed_state_with_min_h();
+    //     }
+    // }
+    //
+    // if (search_status == TIMEOUT)
+    //     return nullptr;
+    //
+    // if (search_status == FAILED) {
+    //     // There are flaws to refine.
+    //     assert(flawed_state != FlawedState::no_state);
+    //
+    //     if (log.is_at_least_debug()) {
+    //         log << "Use flawed state: " << flawed_state << endl;
+    //     }
+    //
+    //     unique_ptr<Split> split;
+    //
+    //     split = create_split(flawed_state.concrete_states, flawed_state.abs_id);
+    //
+    //     if (!utils::extra_memory_padding_is_reserved()) {
+    //         return nullptr;
+    //     }
+    //
+    //     if (split) {
+    //         last_refined_flawed_state = move(flawed_state);
+    //     } else {
+    //         last_refined_flawed_state = FlawedState::no_state;
+    //         // We selected an abstract state without any flaws, so we try again.
+    //         // TODO: why does it not result in an endless loop whitout axioms but with axioms it does?
+    //         // if the following line is not commented out and we have axioms, we get an endless loop for the pick_flawed_abstract_state=batch_min_h option
+    //         return get_min_h_batch_split(cegar_timer);
+    //     }
+    //
+    //     return split;
+    // }
+    //
+    // assert(search_status == SOLVED);
+    // return nullptr;
 }
 
 FlawSearch::FlawSearch(
@@ -558,7 +687,9 @@ FlawSearch::FlawSearch(
     const ShortestPaths &shortest_paths, utils::RandomNumberGenerator &rng,
     PickFlawedAbstractState pick_flawed_abstract_state, PickSplit pick_split,
     PickSplit tiebreak_split, int max_concrete_states_per_abstract_state,
-    int max_state_expansions, const utils::LogProxy &log)
+    int max_state_expansions,
+    const shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
+    const utils::LogProxy &log)
     : task_proxy(*task),
       domain_sizes(get_domain_sizes(task_proxy)),
       abstraction(abstraction),
@@ -566,6 +697,7 @@ FlawSearch::FlawSearch(
       split_selector(task, pick_split, tiebreak_split, log.is_at_least_debug()),
       rng(rng),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
+      regression_strategy(regression_strategy_factory->compute_regression_strategy(task_proxy)),
       max_concrete_states_per_abstract_state(
           max_concrete_states_per_abstract_state),
       max_state_expansions(max_state_expansions),

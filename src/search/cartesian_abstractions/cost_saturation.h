@@ -4,6 +4,8 @@
 #include "flaw_search.h"
 #include "refinement_hierarchy.h"
 #include "split_selector.h"
+#include "regression_strategy.h"
+#include "regression_strategy_factory.h"
 
 #include <memory>
 #include <vector>
@@ -32,7 +34,7 @@ class RegressionStrategyFactory;
 class CostSaturation {
     const std::vector<std::shared_ptr<SubtaskGenerator>> subtask_generators;
     const std::shared_ptr<ExtensionStrategyFactory> extension_strategy_factory;
-    //const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
+    const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
     const int max_states;
     const int max_transitions;
     const double max_time;
@@ -69,7 +71,7 @@ public:
     CostSaturation(
         const std::vector<std::shared_ptr<SubtaskGenerator>> &subtask_generators,
         const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
-        // const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
+        const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
         int max_states, int max_transitions, double max_time,
         bool use_general_costs,
         PickFlawedAbstractState pick_flawed_abstract_state,

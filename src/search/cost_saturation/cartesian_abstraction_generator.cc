@@ -52,8 +52,8 @@ static vector<vector<Successor>> get_backward_graph(
 CartesianAbstractionGenerator::CartesianAbstractionGenerator(
     const vector<shared_ptr<cartesian_abstractions::SubtaskGenerator>>
         &subtasks,
-    const std::shared_ptr<cartesian_abstractions::ExtensionStrategyFactory> &extension_strategy_factory,
-    //const std::shared_ptr<cartesian_abstractions::RegressionStrategyFactory> &regression_strategy_factory,
+    const shared_ptr<cartesian_abstractions::ExtensionStrategyFactory> &extension_strategy_factory,
+    const shared_ptr<cartesian_abstractions::RegressionStrategyFactory> &regression_strategy_factory,
     int max_states, int max_transitions, double max_time,
     cartesian_abstractions::PickFlawedAbstractState pick_flawed_abstract_state,
     cartesian_abstractions::PickSplit pick_split,
@@ -66,7 +66,7 @@ CartesianAbstractionGenerator::CartesianAbstractionGenerator(
     : AbstractionGenerator(verbosity),
       subtask_generators(subtasks),
       extension_strategy_factory(extension_strategy_factory),
-      //regression_strategy_factory(regression_startegy_factory),
+      regression_strategy_factory(regression_strategy_factory),
       max_states(max_states),
       max_transitions(max_transitions),
       max_time(max_time),
@@ -100,7 +100,7 @@ void CartesianAbstractionGenerator::build_abstractions_for_subtasks(
         cartesian_abstractions::CEGAR cegar(
             subtask,
             extension_strategy_factory,
-            //regression_strategy_factory,
+            regression_strategy_factory,
             cartesian_abstractions::get_subtask_limit(
                 max_states, num_states, remaining_subtasks),
             cartesian_abstractions::get_subtask_limit(
@@ -208,7 +208,7 @@ public:
             opts.get_list<shared_ptr<cartesian_abstractions::SubtaskGenerator>>(
                 "subtasks"),
             opts.get<shared_ptr<cartesian_abstractions::ExtensionStrategyFactory>>("extension_strategy"),
-            //opts.get<shared_ptr<cartesian_abstractions::RegressionStrategy>>("regression_strategy"),
+            opts.get<shared_ptr<cartesian_abstractions::RegressionStrategyFactory>>("regression_strategy"),
             opts.get<int>("max_states"), opts.get<int>("max_transitions"),
             opts.get<double>("max_time"),
             opts.get<cartesian_abstractions::PickFlawedAbstractState>(

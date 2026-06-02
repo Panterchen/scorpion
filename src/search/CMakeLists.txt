@@ -888,6 +888,12 @@ create_fast_downward_library(
         cartesian_abstractions/extension_strategy
         cartesian_abstractions/extension_strategy_uncertainty
         cartesian_abstractions/extension_strategy_naive
+        cartesian_abstractions/regression_strategy_factory
+#        cartesian_abstractions/regression_strategy_factory_uncertainty
+        cartesian_abstractions/regression_strategy_factory_naive
+        cartesian_abstractions/regression_strategy
+#        cartesian_abstractions/regression_strategy_uncertainty
+        cartesian_abstractions/regression_strategy_naive
         cartesian_abstractions/flaw
         cartesian_abstractions/flaw_search
         cartesian_abstractions/match_tree

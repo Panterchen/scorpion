@@ -42,7 +42,7 @@ Abstractions ProjectionGenerator::generate_abstractions(
                "Use projections(..., transitions=explicit) or transitions=auto "
                "to build projections that support conditional effects."
             << endl;
-
+		}
     log << "Compute patterns" << endl;
     pattern_generator->set_dead_ends_store(dead_ends);
     PatternCollectionInformation pattern_collection_info =

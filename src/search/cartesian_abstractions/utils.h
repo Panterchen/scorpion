@@ -38,6 +38,14 @@ extern utils::HashSet<FactProxy> get_relaxed_possible_before(
 
 extern std::vector<int> get_domain_sizes(const TaskProxy &task);
 
+// Functions to precompute and lookup preconditions, postconditions
+extern std::vector<std::vector<FactPair>> compute_preconditions_by_operator(
+    const OperatorsProxy &ops);
+extern std::vector<FactPair> compute_postconditions(const OperatorProxy &op);
+extern std::vector<std::vector<FactPair>> compute_postconditions_by_operator(
+    const OperatorsProxy &ops);
+extern int lookup_value(const std::vector<FactPair> &facts, int var);
+
 extern void add_common_cegar_options(plugins::Feature &feature);
 
 extern std::string create_dot_graph(

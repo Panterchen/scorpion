@@ -1,4 +1,5 @@
 #include "regression_strategy_factory_naive.h"
+#include "regression_strategy_factory.h"
 
 #include "regression_strategy_naive.h"
 

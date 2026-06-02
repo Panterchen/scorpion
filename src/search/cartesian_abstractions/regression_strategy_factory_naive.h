@@ -1,7 +1,7 @@
 #ifndef CARTESIAN_ABSTRACTIONS_REGRESSION_STRATEGY_FACTORY_NAIVE_H
 #define CARTESIAN_ABSTRACTIONS_REGRESSION_STRATEGY_FACTORY_NAIVE_H
 
-#include "regression_strategy.h"
+#include "regression_strategy_factory.h"
 
 namespace cartesian_abstractions {
 class AxiomProxy;

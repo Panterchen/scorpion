@@ -4,6 +4,7 @@
 #include "transition.h"
 #include "extension_strategy_factory.h"
 #include "extension_strategy.h"
+#include "utils.h"
 
 #include "../task_utils/task_properties.h"
 
@@ -13,60 +14,62 @@
 using namespace std;
 
 namespace cartesian_abstractions {
-static vector<vector<FactPair>> get_preconditions_by_operator(
-    const OperatorsProxy &ops) {
-    vector<vector<FactPair>> preconditions_by_operator;
-    preconditions_by_operator.reserve(ops.size());
-    for (OperatorProxy op : ops) {
-        vector<FactPair> preconditions =
-            task_properties::get_fact_pairs(op.get_preconditions());
-        sort(preconditions.begin(), preconditions.end());
-        preconditions_by_operator.push_back(move(preconditions));
-    }
-    return preconditions_by_operator;
-}
-
-static vector<FactPair> get_postconditions(const OperatorProxy &op) {
-    // Use map to obtain sorted postconditions.
-    map<int, int> var_to_post;
-    for (FactProxy fact : op.get_preconditions()) {
-        if (!fact.get_variable().is_derived()) {
-            var_to_post[fact.get_variable().get_id()] = fact.get_value();
-        }   
-    }
-    for (EffectProxy effect : op.get_effects()) {
-        FactPair fact = effect.get_fact().get_pair();
-        var_to_post[fact.var] = fact.value;
-    }
-    vector<FactPair> postconditions;
-    postconditions.reserve(var_to_post.size());
-    for (const pair<const int, int> &fact : var_to_post) {
-        postconditions.emplace_back(fact.first, fact.second);
-    }
-    return postconditions;
-}
-
-static vector<vector<FactPair>> get_postconditions_by_operator(
-    const OperatorsProxy &ops) {
-    vector<vector<FactPair>> postconditions_by_operator;
-    postconditions_by_operator.reserve(ops.size());
-    for (OperatorProxy op : ops) {
-        postconditions_by_operator.push_back(get_postconditions(op));
-    }
-    return postconditions_by_operator;
-}
-
-static int lookup_value(const vector<FactPair> &facts, int var) {
-    assert(is_sorted(facts.begin(), facts.end()));
-    for (const FactPair &fact : facts) {
-        if (fact.var == var) {
-            return fact.value;
-        } else if (fact.var > var) {
-            return UNDEFINED;
-        }
-    }
-    return UNDEFINED;
-}
+// TODO: remove the commented out section (moved to utils, for compatibility
+// with regression_strategy_* implementations
+// static vector<vector<FactPair>> get_preconditions_by_operator(
+//     const OperatorsProxy &ops) {
+//     vector<vector<FactPair>> preconditions_by_operator;
+//     preconditions_by_operator.reserve(ops.size());
+//     for (OperatorProxy op : ops) {
+//         vector<FactPair> preconditions =
+//             task_properties::get_fact_pairs(op.get_preconditions());
+//         sort(preconditions.begin(), preconditions.end());
+//         preconditions_by_operator.push_back(move(preconditions));
+//     }
+//     return preconditions_by_operator;
+// }
+//
+// static vector<FactPair> get_postconditions(const OperatorProxy &op) {
+//     // Use map to obtain sorted postconditions.
+//     map<int, int> var_to_post;
+//     for (FactProxy fact : op.get_preconditions()) {
+//         if (!fact.get_variable().is_derived()) {
+//             var_to_post[fact.get_variable().get_id()] = fact.get_value();
+//         }
+//     }
+//     for (EffectProxy effect : op.get_effects()) {
+//         FactPair fact = effect.get_fact().get_pair();
+//         var_to_post[fact.var] = fact.value;
+//     }
+//     vector<FactPair> postconditions;
+//     postconditions.reserve(var_to_post.size());
+//     for (const pair<const int, int> &fact : var_to_post) {
+//         postconditions.emplace_back(fact.first, fact.second);
+//     }
+//     return postconditions;
+// }
+//
+// static vector<vector<FactPair>> get_postconditions_by_operator(
+//     const OperatorsProxy &ops) {
+//     vector<vector<FactPair>> postconditions_by_operator;
+//     postconditions_by_operator.reserve(ops.size());
+//     for (OperatorProxy op : ops) {
+//         postconditions_by_operator.push_back(get_postconditions(op));
+//     }
+//     return postconditions_by_operator;
+// }
+//
+// static int lookup_value(const vector<FactPair> &facts, int var) {
+//     assert(is_sorted(facts.begin(), facts.end()));
+//     for (const FactPair &fact : facts) {
+//         if (fact.var == var) {
+//             return fact.value;
+//         } else if (fact.var > var) {
+//             return UNDEFINED;
+//         }
+//     }
+//     return UNDEFINED;
+// }
 
 static void remove_transitions_with_given_target(
     Transitions &transitions, int state_id) {
@@ -98,8 +101,8 @@ static void add_loop(deque<Loops> &loops, int state_id, int op_id) {
 
 TransitionRewirer::TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory)
     : vars(task.get_variables()), extension_strategy(extension_strategy_factory->compute_extension_strategy(task)),
-    preconditions_by_operator(get_preconditions_by_operator(task.get_operators())),
-    postconditions_by_operator(get_postconditions_by_operator(task.get_operators())){
+    preconditions_by_operator(compute_preconditions_by_operator(task.get_operators())),
+    postconditions_by_operator(compute_postconditions_by_operator(task.get_operators())){
 }
 
 void TransitionRewirer::rewire_transitions(
@@ -277,7 +280,7 @@ void TransitionRewirer::rewire_loops(
             // conflicts, derived variable value is the same for v1 and v2, only var which is basic differs
             // v1 and v2 are the same except for domain of basic variable. for conflict(a,o,b) we consider the basic variable domains of a and derived variable values of b 
             derived_conflict_v1 = conflict_derived_domains(v1.get_cartesian_set(), op_id, v1.get_cartesian_set());
-            derived_conflict_v2 = conflict_derived_domains(v2.get_cartesian_set(), op_id, v1.get_cartesian_set());
+            derived_conflict_v2 = conflict_derived_domains(v2.get_cartesian_set(), op_id, v2.get_cartesian_set());
         }
 
         //cout << "Rewiring loop for op " << task.get_operators()[op_id].get_name() << endl;

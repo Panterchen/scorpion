@@ -6,6 +6,7 @@
 #include "transition_system.h"
 #include "utils.h"
 #include "extension_strategy_factory.h"
+#include "regression_strategy.h"
 #include "regression_strategy_factory.h"
 
 #include "../task_utils/task_properties.h"
@@ -22,7 +23,7 @@ namespace cartesian_abstractions {
 CEGAR::CEGAR(
     const shared_ptr<AbstractTask> &task, 
     const shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
-    //const shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
+    const shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
     int max_states, int max_transitions,    
     double max_time, PickFlawedAbstractState pick_flawed_abstract_state,
     PickSplit pick_split, PickSplit tiebreak_split,
@@ -32,7 +33,7 @@ CEGAR::CEGAR(
     DotGraphVerbosity dot_graph_verbosity)
     : task_proxy(*task),
       extension_strategy_factory(extension_strategy_factory),
-      //regression_strategy_factory(regression_strategy_factory),
+      regression_strategy_factory(regression_strategy_factory),
       domain_sizes(get_domain_sizes(task_proxy)),
       max_states(max_states),
       max_stored_transitions(
@@ -58,7 +59,8 @@ CEGAR::CEGAR(
     flaw_search = make_unique<FlawSearch>(
         task, *abstraction, *shortest_paths, rng, pick_flawed_abstract_state,
         pick_split, tiebreak_split, max_concrete_states_per_abstract_state,
-        max_state_expansions, log);
+        max_state_expansions, regression_strategy_factory,
+        log);
 
     if (log.is_at_least_normal()) {
         log << "Start building abstraction." << endl;
@@ -169,6 +171,15 @@ void CEGAR::refinement_loop() {
       to simplify the implementation. This way, we don't have to split
       goal states later.
     */
+    if (log.is_at_least_debug()) { // print goal facts in debug mode
+        log << "Goal facts:" << endl;
+        for (FactProxy goal : task_proxy.get_goals()) {
+            log << "  var" << goal.get_variable().get_id()
+                << " (derived=" << goal.get_variable().is_derived()
+                << ") = " << goal.get_value() << endl;
+        }
+    }
+
     if (task_proxy.get_goals().size() == 1) {
         separate_facts_unreachable_before_goal();
     } else {

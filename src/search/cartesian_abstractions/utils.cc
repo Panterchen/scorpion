@@ -10,6 +10,7 @@
 #include "../plugins/plugin.h"
 #include "../utils/logging.h"
 #include "../utils/rng_options.h"
+#include "../task_utils/task_properties.h"
 
 #include <algorithm>
 #include <cassert>
@@ -92,6 +93,63 @@ vector<int> get_domain_sizes(const TaskProxy &task) {
         domain_sizes.push_back(var.get_domain_size());
     return domain_sizes;
 }
+
+// implementaion for precomputing operator pre / postconditions
+vector<vector<FactPair>> compute_preconditions_by_operator(
+    const OperatorsProxy &ops) {
+    vector<vector<FactPair>> preconditions_by_operator;
+    preconditions_by_operator.reserve(ops.size());
+    for (OperatorProxy op : ops) {
+        vector<FactPair> preconditions =
+            task_properties::get_fact_pairs(op.get_preconditions());
+        sort(preconditions.begin(), preconditions.end());
+        preconditions_by_operator.push_back(move(preconditions));
+    }
+    return preconditions_by_operator;
+}
+
+vector<FactPair> compute_postconditions(const OperatorProxy &op) {
+    // Use map to obtain sorted postconditions.
+    map<int, int> var_to_post;
+    for (FactProxy fact : op.get_preconditions()) {
+        if (!fact.get_variable().is_derived()) {
+            var_to_post[fact.get_variable().get_id()] = fact.get_value();
+        }
+    }
+    for (EffectProxy effect : op.get_effects()) {
+        FactPair fact = effect.get_fact().get_pair();
+        var_to_post[fact.var] = fact.value;
+    }
+    vector<FactPair> postconditions;
+    postconditions.reserve(var_to_post.size());
+    for (const pair<const int, int> &fact : var_to_post) {
+        postconditions.emplace_back(fact.first, fact.second);
+    }
+    return postconditions;
+}
+
+vector<vector<FactPair>> compute_postconditions_by_operator(
+    const OperatorsProxy &ops) {
+    vector<vector<FactPair>> postconditions_by_operator;
+    postconditions_by_operator.reserve(ops.size());
+    for (OperatorProxy op : ops) {
+        postconditions_by_operator.push_back(compute_postconditions(op));
+    }
+    return postconditions_by_operator;
+}
+
+int lookup_value(const vector<FactPair> &facts, int var) {
+    assert(is_sorted(facts.begin(), facts.end()));
+    for (const FactPair &fact : facts) {
+        if (fact.var == var) {
+            return fact.value;
+        } else if (fact.var > var) {
+            return UNDEFINED;
+        }
+    }
+    return UNDEFINED;
+}
+
 
 static void add_pick_flawed_abstract_state_strategies(
     plugins::Feature &feature) {
@@ -191,11 +249,13 @@ void add_common_cegar_options(plugins::Feature &feature) {
     // Extension strategy option.
     feature.add_option<shared_ptr<ExtensionStrategyFactory>>(
         "extension_strategy",
-        "See detailed documentation for extension strategies.");
-    /*// Regression strategy option.
+        "See detailed documentation for extension strategies.",
+        "extend_naive()");
+    // Regression strategy option.
     feature.add_option<shared_ptr<RegressionStrategyFactory>>(
         "regression_strategy",
-        "See detailed documentation for regression strategies.");*/
+        "See detailed documentation for regression strategies.",
+        "regress_naive()");
     feature.add_option<int>(
         "max_states", "maximum sum of abstract states over all abstractions",
         "infinity", plugins::Bounds("1", "infinity"));

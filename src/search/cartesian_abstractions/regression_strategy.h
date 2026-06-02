@@ -3,6 +3,7 @@
 
 #include <utility>
 #include "cartesian_set.h"
+#include "abstract_state.h"
 
 namespace cartesian_abstractions {
 
@@ -21,9 +22,11 @@ class RegressionStrategy {
 public:
     explicit RegressionStrategy();
     virtual ~RegressionStrategy() = default;
-    // the following two functions might not be usefull the way they are defined now
+    // the first two functions can be used to explicitly calculate the regression
     virtual CartesianSet get_regression(const CartesianSet &a, int operator_id) = 0;
-    virtual vector<int> get_regression_values(const CartesianSet &a, int variable, int operator_id) = 0;
+    virtual std::vector<int> get_regression_values(const CartesianSet &a, int variable, int operator_id) = 0;
+    // the third function implements usecase of the regression in the deviation split calculation of Flaw Search
+    virtual std::vector<int> get_wanted_values(const AbstractState &a, const AbstractState &t, int variable, int operator_id) = 0;
 };
 }
 
