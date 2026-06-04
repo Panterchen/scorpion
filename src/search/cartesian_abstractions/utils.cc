@@ -113,6 +113,9 @@ vector<FactPair> compute_postconditions(const OperatorProxy &op) {
     map<int, int> var_to_post;
     for (FactProxy fact : op.get_preconditions()) {
         if (!fact.get_variable().is_derived()) {
+            /* preconditions on derived variables are not relevant to postconditions
+             * since the derived variable value is newly derived in the successor state
+             */
             var_to_post[fact.get_variable().get_id()] = fact.get_value();
         }
     }

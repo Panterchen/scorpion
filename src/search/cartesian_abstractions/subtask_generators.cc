@@ -144,6 +144,18 @@ shared_ptr<AbstractTask> LandmarkDecomposition::build_domain_abstracted_task(
 SharedTasks LandmarkDecomposition::get_subtasks(
     const shared_ptr<AbstractTask> &task, utils::LogProxy &log) const {
     SharedTasks subtasks;
+    /* Landmark generation does not currently support axioms (axiom achievers
+     * aren't regular operators and cause an out-of-bounds access in
+     * LandmarkFactoryHM). Fall back on no subtasks for axiom tasks.
+     */
+    TaskProxy task_proxy(*task);
+    if (!task_proxy.get_axioms().empty()) {
+        if (log.is_at_least_normal()) {
+            log << "Landmark decomposition skipped : Task contains axioms."
+                << endl;
+        }
+        return subtasks;
+    }
     const shared_ptr<landmarks::LandmarkGraph> landmark_graph =
         get_landmark_graph(task);
     utils::HashMap<FactPair, landmarks::LandmarkNode *> atom_to_landmark_map =

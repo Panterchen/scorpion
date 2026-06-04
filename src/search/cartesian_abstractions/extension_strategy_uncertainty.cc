@@ -167,7 +167,8 @@ std::deque<std::pair<FactPair, bool>> ExtensionStrategyUncertainty::setup_fact_q
     // Add fact pairs for basic variables definitiely true/false in a to the queue
     for (VariableProxy var_prox : variables){
 
-        // only iterate over basic variables
+        // only iterate over basic variables, break as soon as the first derived variable is encountered
+        // (assumes that the variables are ordered this way: first all basic, then all derived variables)
         if (var_prox.is_derived()){
             break;
         }

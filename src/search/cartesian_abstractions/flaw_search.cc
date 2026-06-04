@@ -261,24 +261,19 @@ static void get_deviation_splits(
             ) {
             // Note: we could precompute the "wanted" vector, but not the split.
             vector<int> wanted = regression_strategy.get_wanted_values(abs_state, target_abs_state, var, op_id);
-            // for (int value = 0; value < domain_sizes[var]; ++value) {
-            //     if (abs_state.contains(var, value) &&
-            //         target_abs_state.contains(var, value)) {
-            //         wanted.push_back(value);
-            //     }
-            // }
             /* For derived variables, it can happen that the wanted vector is not
              * empty, but that it contains a single value and that this is the
              * only value in the abstract state 'a' we want to split. So we skip
              * derived variables with non-empty wanted vectors where |a[v]| = 1
+             * wanted should never be empty if
+             * regression_strategy.get_wanted_vectors is implemented correctly
             */
             assert(!wanted.empty());
             if (wanted.size() < static_cast<size_t>(abs_state.get_cartesian_set().count(var))) {
+                // remove degenerate splits on derived variables
                 add_split(splits, Split(abs_state.get_id(), var, fact.value,
                                         move(wanted), count));
             }
-            //add_split(splits, Split(abs_state.get_id(), var, fact.value, move(wanted), count));
-            
         }
     }
 }
@@ -616,70 +611,6 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             last_refined_flawed_state = FlawedState::no_state;
         }
     }
-     /* TODO remove if version above is sound.
-      * Old version for tasks without derived variables. should be functionally
-      * identical in the non-derived cases compared to the new one, but kept
-      * until extensive testing is complete
-      */
-    // if (last_refined_flawed_state != FlawedState::no_state) {
-    //     // Recycle flaws of the last refined abstract state.
-    //     Cost old_h = last_refined_flawed_state.h;
-    //     for (const StateID &state_id :
-    //          last_refined_flawed_state.concrete_states) {
-    //         State state = state_registry->lookup_state(state_id);
-    //         // We only add non-goal states to flawed_states.
-    //         assert(!task_properties::is_goal_state(task_proxy, state));
-    //         int abs_id = get_abstract_state_id(state);
-    //         if (get_h_value(abs_id) == old_h) {
-    //             add_flaw(abs_id, state);
-    //         }
-    //     }
-    // }
-    //
-    // FlawedState flawed_state = get_flawed_state_with_min_h();
-    // auto search_status = SearchStatus::FAILED;
-    // if (flawed_state == FlawedState::no_state) {
-    //     std::cout << "No flawed state with min h found, search for flaws again." << std::endl;
-    //     search_status = search_for_flaws(cegar_timer);
-    //     if (search_status == SearchStatus::FAILED) {
-    //         flawed_state = get_flawed_state_with_min_h();
-    //     }
-    // }
-    //
-    // if (search_status == TIMEOUT)
-    //     return nullptr;
-    //
-    // if (search_status == FAILED) {
-    //     // There are flaws to refine.
-    //     assert(flawed_state != FlawedState::no_state);
-    //
-    //     if (log.is_at_least_debug()) {
-    //         log << "Use flawed state: " << flawed_state << endl;
-    //     }
-    //
-    //     unique_ptr<Split> split;
-    //
-    //     split = create_split(flawed_state.concrete_states, flawed_state.abs_id);
-    //
-    //     if (!utils::extra_memory_padding_is_reserved()) {
-    //         return nullptr;
-    //     }
-    //
-    //     if (split) {
-    //         last_refined_flawed_state = move(flawed_state);
-    //     } else {
-    //         last_refined_flawed_state = FlawedState::no_state;
-    //         // We selected an abstract state without any flaws, so we try again.
-    //         // TODO: why does it not result in an endless loop whitout axioms but with axioms it does?
-    //         // if the following line is not commented out and we have axioms, we get an endless loop for the pick_flawed_abstract_state=batch_min_h option
-    //         return get_min_h_batch_split(cegar_timer);
-    //     }
-    //
-    //     return split;
-    // }
-    //
-    // assert(search_status == SOLVED);
-    // return nullptr;
 }
 
 FlawSearch::FlawSearch(
