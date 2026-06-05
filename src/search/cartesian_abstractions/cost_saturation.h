@@ -5,6 +5,7 @@
 #include "refinement_hierarchy.h"
 #include "split_selector.h"
 #include "regression_strategy.h"
+#include "extension_strategy.h"
 #include "regression_strategy_factory.h"
 
 #include <memory>
@@ -21,7 +22,7 @@ namespace cartesian_abstractions {
 class CartesianHeuristicFunction;
 enum class DotGraphVerbosity;
 class SubtaskGenerator;
-class ExtensionStrategyFactory;
+class ExtensionStrategy;
 class RegressionStrategyFactory;
 
 /*
@@ -33,7 +34,7 @@ class RegressionStrategyFactory;
 */
 class CostSaturation {
     const std::vector<std::shared_ptr<SubtaskGenerator>> subtask_generators;
-    const std::shared_ptr<ExtensionStrategyFactory> extension_strategy_factory;
+    const std::shared_ptr<ExtensionStrategy> extension_strategy;
     const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
     const int max_states;
     const int max_transitions;
@@ -70,7 +71,7 @@ class CostSaturation {
 public:
     CostSaturation(
         const std::vector<std::shared_ptr<SubtaskGenerator>> &subtask_generators,
-        const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
+        const std::shared_ptr<ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
         int max_states, int max_transitions, double max_time,
         bool use_general_costs,

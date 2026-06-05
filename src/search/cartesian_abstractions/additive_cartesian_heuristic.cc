@@ -4,6 +4,7 @@
 #include "cost_saturation.h"
 #include "types.h"
 #include "utils.h"
+#include "extension_strategy.h"
 #include "regression_strategy.h"
 #include "regression_strategy_factory.h"
 
@@ -19,7 +20,7 @@ using namespace std;
 namespace cartesian_abstractions {
 AdditiveCartesianHeuristic::AdditiveCartesianHeuristic(
     const vector<shared_ptr<SubtaskGenerator>> &subtasks, 
-    const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
+    const std::shared_ptr<ExtensionStrategy> &extension_strategy,
     const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
     int max_states,
     int max_transitions, double max_time,
@@ -32,7 +33,7 @@ AdditiveCartesianHeuristic::AdditiveCartesianHeuristic(
     bool cache_estimates, const string &description, utils::Verbosity verbosity)
     : Heuristic(transform, cache_estimates, description, verbosity) {
     CostSaturation cost_saturation(
-        subtasks, extension_strategy_factory, regression_strategy_factory,
+        subtasks, extension_strategy, regression_strategy_factory,
         max_states, max_transitions, max_time, use_general_costs,
         pick_flawed_abstract_state, pick_split, tiebreak_split,
         max_concrete_states_per_abstract_state, max_state_expansions,
@@ -126,7 +127,7 @@ public:
         g_hacked_sort_transitions = opts.get<bool>("sort_transitions");
         return plugins::make_shared_from_arg_tuples<AdditiveCartesianHeuristic>(
             opts.get_list<shared_ptr<SubtaskGenerator>>("subtasks"),
-            opts.get<shared_ptr<ExtensionStrategyFactory>>("extension_strategy"),
+            opts.get<shared_ptr<ExtensionStrategy>>("extension_strategy"),
             opts.get<shared_ptr<RegressionStrategyFactory>>("regression_strategy"),
             opts.get<int>("max_states"), opts.get<int>("max_transitions"),
             opts.get<double>("max_time"),

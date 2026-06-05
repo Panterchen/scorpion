@@ -17,12 +17,11 @@ class TaskProxy;
 
 namespace cartesian_abstractions {
 class ExtensionStrategy;
-class ExtensionStrategyFactory;
 
 class TransitionRewirer {
 
     const VariablesProxy vars;
-    std::unique_ptr<ExtensionStrategy> extension_strategy;
+    std::unique_ptr<ExtensionStrategyInstance> extension_strategy_instance;
 
     const std::vector<std::vector<FactPair>> preconditions_by_operator;
     const std::vector<std::vector<FactPair>> postconditions_by_operator;
@@ -42,7 +41,7 @@ class TransitionRewirer {
     bool conflict_derived_domains(const CartesianSet &a, int op_id, const CartesianSet &b) const;
 
 public:
-    explicit TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory);
+    explicit TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategy> &extension_strategy);
 
     void rewire_transitions(
         std::deque<Transitions> &incoming, std::deque<Transitions> &outgoing,

@@ -1,29 +1,32 @@
 #include "extension_strategy_uncertainty.h"
 #include "cartesian_set.h"
+#include "../plugins/plugin.h"
 
 #include <cassert>
+#include <iostream>
 
 using namespace std;
 
 namespace cartesian_abstractions {
-ExtensionStrategyUncertainty::ExtensionStrategyUncertainty(
+
+// ---- ExtensionStrategyUncertaintyInstance ----
+
+ExtensionStrategyUncertaintyInstance::ExtensionStrategyUncertaintyInstance(
     const AxiomsProxy &axioms, const VariablesProxy &variables)
     : axioms(axioms), variables(variables) { 
 }
 
-CartesianSet ExtensionStrategyUncertainty::get_extension(const CartesianSet &a){
+CartesianSet ExtensionStrategyUncertaintyInstance::get_extension(
+    const CartesianSet &a) {
 
     CartesianSet result = a;
 
     // Count number of unsatisfied body atoms for each axiom
     vector<int> unsat_body_atoms(axioms.size());
-
     // Count number of axioms possibly supporting each derived variable
     vector<int> supporting_axioms(variables.size());
-
     // Axioms that we know can not fire because they have at least one unsatisfied body atom
     std::unordered_set<int> unsat_axioms;
-
 
     for (OperatorProxy axiom : axioms){
         unsat_body_atoms[axiom.get_id()] = axiom.get_effects()[0].get_conditions().size();
@@ -89,10 +92,10 @@ CartesianSet ExtensionStrategyUncertainty::get_extension(const CartesianSet &a){
 }
 
 
-int ExtensionStrategyUncertainty::get_extension_value(const CartesianSet &a, int var) {
+int ExtensionStrategyUncertaintyInstance::get_extension_value(
+    const CartesianSet &a, int var) {
     // Count number of unsatisfied body atoms for each axiom
     vector<int> unsat_body_atoms(axioms.size());
-
     // Count number of axioms possibly supporting each derived variable
     vector<int> supporting_axioms(variables.size());
     // Axioms that we know can not fire because they have at least one unsatisfied body atom
@@ -105,7 +108,6 @@ int ExtensionStrategyUncertainty::get_extension_value(const CartesianSet &a, int
 
     // Initialize queue with facts known to be true/false in abstract state a
     std::deque<std::pair<FactPair, bool>> fact_queue = setup_fact_queue(a);
-    
     // variables already seen (added to queue)
     vector<bool> seen_vars(variables.size(), false); 
    
@@ -159,14 +161,11 @@ int ExtensionStrategyUncertainty::get_extension_value(const CartesianSet &a, int
 }
 
 
-
-
-std::deque<std::pair<FactPair, bool>> ExtensionStrategyUncertainty::setup_fact_queue(const CartesianSet &a){
+std::deque<std::pair<FactPair, bool>> ExtensionStrategyUncertaintyInstance::setup_fact_queue(
+    const CartesianSet &a) {
     std::deque<std::pair<FactPair, bool>> fact_queue;
-
     // Add fact pairs for basic variables definitiely true/false in a to the queue
-    for (VariableProxy var_prox : variables){
-
+    for (VariableProxy var_prox : variables) {
         // only iterate over basic variables, break as soon as the first derived variable is encountered
         // (assumes that the variables are ordered this way: first all basic, then all derived variables)
         if (var_prox.is_derived()){
@@ -197,11 +196,61 @@ std::deque<std::pair<FactPair, bool>> ExtensionStrategyUncertainty::setup_fact_q
 
 
 // Add item to queue if not already seen
-void ExtensionStrategyUncertainty::enqueue(std::deque<std::pair<FactPair, bool>> &q, std::vector<bool> &seen_vars, FactPair fact, bool x) {
+void ExtensionStrategyUncertaintyInstance::enqueue(
+    std::deque<std::pair<FactPair, bool>> &q, std::vector<bool> &seen_vars,
+    FactPair fact, bool x) {
     if (!seen_vars[fact.var]){
         seen_vars[fact.var] = true;
         q.emplace_back(fact, x);
     }
 }
+
+// ---- ExtensionStrategyUncertainty (generator) ----
+
+ExtensionStrategyUncertainty::ExtensionStrategyUncertainty(utils::Verbosity verbosity)
+    : ExtensionStrategy(verbosity) {
+}
+
+unique_ptr<ExtensionStrategyInstance> ExtensionStrategyUncertainty::create(
+    const TaskProxy &task_proxy) const {
+    return make_unique<ExtensionStrategyUncertaintyInstance>(
+        task_proxy.get_axioms(), task_proxy.get_variables());
+}
+
+string ExtensionStrategyUncertainty::name() const {
+    return "uncertainty";
+}
+
+void ExtensionStrategyUncertainty::dump_strategy_specific_options() const {
+    /*if (log.is_at_least_normal()) {
+
+    }*/
+}
+
+class ExtensionStrategyUncertaintyFeature
+    : public plugins::TypedFeature<
+          ExtensionStrategy, ExtensionStrategyUncertainty> {
+public:
+    ExtensionStrategyUncertaintyFeature()
+        : TypedFeature("extend_uncertain") {
+        document_title("Uncertainty extension strategy");
+
+        document_synopsis(
+            "An extension strategy that considers uncertainty semantics "
+            "for Cartesian sets with derived variables.");
+
+        add_extension_strategy_options_to_feature(*this);
+
+        document_note("Note", "TODO");
+    }
+    virtual shared_ptr<ExtensionStrategyUncertainty> create_component(
+        const plugins::Options &opts) const override {
+        return plugins::make_shared_from_arg_tuples<
+            ExtensionStrategyUncertainty>(
+            get_extension_strategy_arguments_from_options(opts));
+    }
+};
+
+static plugins::FeaturePlugin<ExtensionStrategyUncertaintyFeature> _plugin;
 
 }

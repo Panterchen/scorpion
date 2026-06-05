@@ -13,7 +13,7 @@ enum class PickFlawedAbstractState;
 enum class PickSplit;
 class SubtaskGenerator;
 enum class TransitionRepresentation;
-class ExtensionStrategyFactory;
+class ExtensionStrategy;
 class RegressionStrategyFactory;
 }
 
@@ -26,7 +26,7 @@ namespace cost_saturation {
 class CartesianAbstractionGenerator : public AbstractionGenerator {
     const std::vector<std::shared_ptr<cartesian_abstractions::SubtaskGenerator>>
         subtask_generators;
-    const std::shared_ptr<cartesian_abstractions::ExtensionStrategyFactory> extension_strategy_factory;
+    const std::shared_ptr<cartesian_abstractions::ExtensionStrategy> extension_strategy;
     const std::shared_ptr<cartesian_abstractions::RegressionStrategyFactory> regression_strategy_factory;
     const int max_states;
     const int max_transitions;
@@ -57,7 +57,7 @@ public:
         const std::vector<
             std::shared_ptr<cartesian_abstractions::SubtaskGenerator>>
             &subtasks,
-        const std::shared_ptr<cartesian_abstractions::ExtensionStrategyFactory> &extension_strategy_factory,
+        const std::shared_ptr<cartesian_abstractions::ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<cartesian_abstractions::RegressionStrategyFactory> &regression_strategy_factory,
         int max_states, int max_transitions, double max_time,
         cartesian_abstractions::PickFlawedAbstractState

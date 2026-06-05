@@ -7,6 +7,7 @@
 #include "types.h"
 #include "regression_strategy.h"
 #include "regression_strategy_factory.h"
+#include "extension_strategy.h"
 
 #include "../task_proxy.h"
 
@@ -23,7 +24,7 @@ namespace cartesian_abstractions {
 class Abstraction;
 enum class DotGraphVerbosity;
 class ShortestPaths;
-class ExtensionStrategyFactory;
+class ExtensionStrategy;
 class RegressionStrategyFactory;
 
 /*
@@ -36,7 +37,7 @@ class RegressionStrategyFactory;
 */
 class CEGAR {
     const TaskProxy task_proxy;
-    const std::shared_ptr<ExtensionStrategyFactory> extension_strategy_factory;
+    const std::shared_ptr<ExtensionStrategy> extension_strategy;
     const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
     const std::vector<int> domain_sizes;
     const int max_states;
@@ -78,7 +79,7 @@ class CEGAR {
 public:
     CEGAR(
         const std::shared_ptr<AbstractTask> &task, 
-        const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
+        const std::shared_ptr<ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
         int max_states,
         int max_transitions, double max_time,

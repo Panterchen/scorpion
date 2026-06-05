@@ -22,7 +22,7 @@ using namespace std;
 
 namespace cartesian_abstractions {
 class SubtaskGenerator;
-class ExtensionStrategyFactory;
+class ExtensionStrategy;
 class RegressionStrategyFactory;
 bool g_hacked_sort_transitions = false;
 
@@ -250,7 +250,7 @@ void add_common_cegar_options(plugins::Feature &feature) {
         "subtasks", "subtask generators",
         "[landmarks(order=random), goals(order=random)]");
     // Extension strategy option.
-    feature.add_option<shared_ptr<ExtensionStrategyFactory>>(
+    feature.add_option<shared_ptr<ExtensionStrategy>>(
         "extension_strategy",
         "See detailed documentation for extension strategies.",
         "extend_naive()");

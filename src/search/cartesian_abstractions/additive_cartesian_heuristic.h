@@ -2,6 +2,7 @@
 #define CARTESIAN_ABSTRACTIONS_ADDITIVE_CARTESIAN_HEURISTIC_H
 
 #include "../heuristic.h"
+#include "extension_strategy.h"
 #include "regression_strategy.h"
 #include "regression_strategy_factory.h"
 
@@ -10,7 +11,7 @@
 namespace cartesian_abstractions {
 class CartesianHeuristicFunction;
 class SubtaskGenerator;
-class ExtensionStrategyFactory;
+class ExtensionStrategy;
 class RegressionStrategyFactory;
 enum class DotGraphVerbosity;
 enum class PickFlawedAbstractState;
@@ -30,7 +31,7 @@ protected:
 public:
     AdditiveCartesianHeuristic(
         const std::vector<std::shared_ptr<SubtaskGenerator>> &subtasks,
-        const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory,
+        const std::shared_ptr<ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
         int max_states, int max_transitions, double max_time,
         PickFlawedAbstractState pick_flawed_abstract_state,

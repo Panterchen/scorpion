@@ -2,7 +2,6 @@
 
 #include "abstract_state.h"
 #include "transition.h"
-#include "extension_strategy_factory.h"
 #include "extension_strategy.h"
 #include "utils.h"
 
@@ -43,8 +42,8 @@ static void add_loop(deque<Loops> &loops, int state_id, int op_id) {
     loops[state_id].push_back(op_id);
 }
 
-TransitionRewirer::TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategyFactory> &extension_strategy_factory)
-    : vars(task.get_variables()), extension_strategy(extension_strategy_factory->compute_extension_strategy(task)),
+TransitionRewirer::TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategy> &extension_strategy)
+    : vars(task.get_variables()), extension_strategy_instance(extension_strategy->create(task)),
     preconditions_by_operator(compute_preconditions_by_operator(task.get_operators())),
     postconditions_by_operator(compute_postconditions_by_operator(task.get_operators())){
 }
@@ -89,7 +88,7 @@ void TransitionRewirer::rewire_incoming_transitions(
         if (derived) {
             // determine derived variable value
             CartesianSet u_cs = update_cartesian_set(u.get_cartesian_set(), op_id);
-            post = extension_strategy->get_extension_value(u_cs, var);
+            post = extension_strategy_instance->get_extension_value(u_cs, var);
         } else{
             // determine basic variable post value
             post = get_postcondition_value(op_id, var);
@@ -216,7 +215,7 @@ void TransitionRewirer::rewire_loops(
             // derived value is the same for both v1 and v2 
             // computation of derived value only relies on basic variables, however v1 and v2 only differ in var which is derived
             CartesianSet v1_cs = update_cartesian_set(v1.get_cartesian_set(), op_id);
-            post = extension_strategy->get_extension_value(v1_cs, var);
+            post = extension_strategy_instance->get_extension_value(v1_cs, var);
         } else {
             // determine basic variable post value
             post = get_postcondition_value(op_id, var);
@@ -347,7 +346,7 @@ CartesianSet TransitionRewirer::update_cartesian_set(const CartesianSet &a, int 
 
 bool TransitionRewirer::conflict_derived_domains(const CartesianSet &a, int op_id, const CartesianSet &b) const {
     
-    CartesianSet extended_a_o = extension_strategy->get_extension(update_cartesian_set(a, op_id));
+    CartesianSet extended_a_o = extension_strategy_instance->get_extension(update_cartesian_set(a, op_id));
 
     for (VariableProxy var : vars){
         if (var.is_derived() && !extended_a_o.intersects(b, var.get_id())){
