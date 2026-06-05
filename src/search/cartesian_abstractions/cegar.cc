@@ -7,7 +7,6 @@
 #include "utils.h"
 #include "extension_strategy.h"
 #include "regression_strategy.h"
-#include "regression_strategy_factory.h"
 
 #include "../task_utils/task_properties.h"
 #include "../tasks/domain_abstracted_task.h"
@@ -23,7 +22,7 @@ namespace cartesian_abstractions {
 CEGAR::CEGAR(
     const shared_ptr<AbstractTask> &task, 
     const shared_ptr<ExtensionStrategy> &extension_strategy,
-    const shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
+    const shared_ptr<RegressionStrategy> &regression_strategy,
     int max_states, int max_transitions,    
     double max_time, PickFlawedAbstractState pick_flawed_abstract_state,
     PickSplit pick_split, PickSplit tiebreak_split,
@@ -33,7 +32,7 @@ CEGAR::CEGAR(
     DotGraphVerbosity dot_graph_verbosity)
     : task_proxy(*task),
       extension_strategy(extension_strategy),
-      regression_strategy_factory(regression_strategy_factory),
+      regression_strategy(regression_strategy),
       domain_sizes(get_domain_sizes(task_proxy)),
       max_states(max_states),
       max_stored_transitions(
@@ -59,7 +58,7 @@ CEGAR::CEGAR(
     flaw_search = make_unique<FlawSearch>(
         task, *abstraction, *shortest_paths, rng, pick_flawed_abstract_state,
         pick_split, tiebreak_split, max_concrete_states_per_abstract_state,
-        max_state_expansions, regression_strategy_factory,
+        max_state_expansions, regression_strategy,
         log);
 
     if (log.is_at_least_normal()) {

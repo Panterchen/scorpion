@@ -6,7 +6,6 @@
 #include "transition_rewirer.h"
 #include "types.h"
 #include "regression_strategy.h"
-#include "regression_strategy_factory.h"
 #include "extension_strategy.h"
 
 #include "../task_proxy.h"
@@ -25,7 +24,7 @@ class Abstraction;
 enum class DotGraphVerbosity;
 class ShortestPaths;
 class ExtensionStrategy;
-class RegressionStrategyFactory;
+class RegressionStrategy;
 
 /*
   Iteratively refine a Cartesian abstraction with counterexample-guided
@@ -38,7 +37,7 @@ class RegressionStrategyFactory;
 class CEGAR {
     const TaskProxy task_proxy;
     const std::shared_ptr<ExtensionStrategy> extension_strategy;
-    const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
+    const std::shared_ptr<RegressionStrategy> regression_strategy;
     const std::vector<int> domain_sizes;
     const int max_states;
     const int max_stored_transitions;
@@ -80,7 +79,7 @@ public:
     CEGAR(
         const std::shared_ptr<AbstractTask> &task, 
         const std::shared_ptr<ExtensionStrategy> &extension_strategy,
-        const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
+        const std::shared_ptr<RegressionStrategy> &regression_strategy,
         int max_states,
         int max_transitions, double max_time,
         PickFlawedAbstractState pick_flawed_abstract_state,

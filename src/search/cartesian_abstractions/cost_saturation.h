@@ -6,7 +6,6 @@
 #include "split_selector.h"
 #include "regression_strategy.h"
 #include "extension_strategy.h"
-#include "regression_strategy_factory.h"
 
 #include <memory>
 #include <vector>
@@ -23,7 +22,7 @@ class CartesianHeuristicFunction;
 enum class DotGraphVerbosity;
 class SubtaskGenerator;
 class ExtensionStrategy;
-class RegressionStrategyFactory;
+class RegressionStrategy;
 
 /*
   Get subtasks from SubtaskGenerators, reduce their costs by wrapping
@@ -35,7 +34,7 @@ class RegressionStrategyFactory;
 class CostSaturation {
     const std::vector<std::shared_ptr<SubtaskGenerator>> subtask_generators;
     const std::shared_ptr<ExtensionStrategy> extension_strategy;
-    const std::shared_ptr<RegressionStrategyFactory> regression_strategy_factory;
+    const std::shared_ptr<RegressionStrategy> regression_strategy;
     const int max_states;
     const int max_transitions;
     const double max_time;
@@ -72,7 +71,7 @@ public:
     CostSaturation(
         const std::vector<std::shared_ptr<SubtaskGenerator>> &subtask_generators,
         const std::shared_ptr<ExtensionStrategy> &extension_strategy,
-        const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
+        const std::shared_ptr<RegressionStrategy> &regression_strategy,
         int max_states, int max_transitions, double max_time,
         bool use_general_costs,
         PickFlawedAbstractState pick_flawed_abstract_state,

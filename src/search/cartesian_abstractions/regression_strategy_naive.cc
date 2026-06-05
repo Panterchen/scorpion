@@ -3,12 +3,18 @@
 #include "abstract_state.h"
 #include "utils.h"
 #include "types.h"
+
+#include "../plugins/plugin.h"
+
 #include <cassert>
 
 using namespace std;
 
 namespace cartesian_abstractions {
-RegressionStrategyNaive::RegressionStrategyNaive(
+
+// ---- RegressionStrategyNaiveInstance ----
+
+RegressionStrategyNaiveInstance::RegressionStrategyNaiveInstance(
     const VariablesProxy &variables, const OperatorsProxy &operators)
     : variables(variables),
         preconditions_by_operator(compute_preconditions_by_operator(operators)),
@@ -16,7 +22,8 @@ RegressionStrategyNaive::RegressionStrategyNaive(
 {
 }
 
-CartesianSet RegressionStrategyNaive::get_regression(const CartesianSet &a, int operator_id){
+CartesianSet RegressionStrategyNaiveInstance::get_regression(
+    const CartesianSet &a, int operator_id) {
     CartesianSet result = a;
     /* This function calculates the naive regression overapproximation for a
      * Cartesian set 'a' and an operator 'o' as a full Cartesian set.
@@ -39,7 +46,8 @@ CartesianSet RegressionStrategyNaive::get_regression(const CartesianSet &a, int 
 }
 
 
-vector<int> RegressionStrategyNaive::get_regression_values(const CartesianSet &a, int variable, int operator_id) {
+vector<int> RegressionStrategyNaiveInstance::get_regression_values(
+    const CartesianSet &a, int variable, int operator_id) {
     vector<int> result;
     /* This function calculates the naive regression overapproximation for a
      * variable, based on a Cartesian set 'a' and an operator 'o' as a vector
@@ -88,8 +96,9 @@ vector<int> RegressionStrategyNaive::get_regression_values(const CartesianSet &a
     return result; 
 }
 
-vector<int> RegressionStrategyNaive::get_wanted_values(
-    const AbstractState &a, const AbstractState &t, int variable, int operator_id) {
+vector<int> RegressionStrategyNaiveInstance::get_wanted_values(
+    const AbstractState &a, const AbstractState &t, int variable,
+    int operator_id) {
     /* This function calculates the wanted vector used to determine a deviation
      * split in flaw_search->get_deviation_splits.
      * The logic for the wanted vector with naive regression is as follows:
@@ -122,5 +131,51 @@ vector<int> RegressionStrategyNaive::get_wanted_values(
     }
 }
 
+// ----- RegressionStrategyNaive (generator) -----
+
+RegressionStrategyNaive::RegressionStrategyNaive(utils::Verbosity verbosity)
+    : RegressionStrategy(verbosity) {
+}
+
+unique_ptr<RegressionStrategyInstance> RegressionStrategyNaive::create(
+    const TaskProxy &task_proxy) const {
+    return make_unique<RegressionStrategyNaiveInstance>(
+        task_proxy.get_variables(), task_proxy.get_operators());
+}
+
+string RegressionStrategyNaive::name() const {
+    return "naive";
+}
+
+void RegressionStrategyNaive::dump_strategy_specific_options() const {
+    /*if (log.is_at_least_normal()) {
+
+    }*/
+}
+
+class RegressionStrategyNaiveFeature
+    : public plugins::TypedFeature<
+          RegressionStrategy, RegressionStrategyNaive> {
+public:
+    RegressionStrategyNaiveFeature()
+        : TypedFeature("regress_naive") {
+        document_title("naive regression strategy");
+
+        document_synopsis(
+            "A regression strategy.");
+
+        add_regression_strategy_options_to_feature(*this);
+
+        document_note("Note", "TODO");
+    }
+    virtual shared_ptr<RegressionStrategyNaive> create_component(
+        const plugins::Options &opts) const override {
+        return plugins::make_shared_from_arg_tuples<
+            RegressionStrategyNaive>(
+            get_regression_strategy_arguments_from_options(opts));
+    }
+};
+
+static plugins::FeaturePlugin<RegressionStrategyNaiveFeature> _plugin;
 
 }

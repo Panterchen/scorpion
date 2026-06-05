@@ -10,7 +10,7 @@ using namespace std;
 namespace cartesian_abstractions {
 RegressionStrategyFactoryNaive::RegressionStrategyFactoryNaive(
     utils::Verbosity verbosity)
-    : RegressionStrategyFactory(verbosity) {
+    : RegressionStrategy(verbosity) {
 }
 
 unique_ptr<RegressionStrategy>
@@ -32,7 +32,7 @@ void RegressionStrategyFactoryNaive::dump_strategy_specific_options() const {
 
 class RegressionStrategyFactoryNaiveFeature
     : public plugins::TypedFeature<
-          RegressionStrategyFactory, RegressionStrategyFactoryNaive> {
+          RegressionStrategy, RegressionStrategyFactoryNaive> {
 public:
     RegressionStrategyFactoryNaiveFeature()
         : TypedFeature("regress_naive") {

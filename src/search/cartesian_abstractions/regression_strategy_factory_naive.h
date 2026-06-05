@@ -6,7 +6,7 @@
 namespace cartesian_abstractions {
 class AxiomProxy;
 
-class RegressionStrategyFactoryNaive : public RegressionStrategyFactory {
+class RegressionStrategyFactoryNaive : public RegressionStrategy {
 protected:
     virtual std::string name() const override;
     virtual void dump_strategy_specific_options() const override;

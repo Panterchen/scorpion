@@ -6,7 +6,6 @@
 #include "shortest_paths.h"
 #include "split_selector.h"
 #include "regression_strategy.h"
-#include "regression_strategy_factory.h"
 #include "transition_system.h"
 #include "utils.h"
 #include "../state_registry.h"
@@ -230,7 +229,7 @@ using CompactFactMap = phmap::flat_hash_map<FactPair, int, FactPairHash>;
 static void get_deviation_splits(
     const AbstractState &abs_state, const CompactFactMap &fact_count,
     const AbstractState &target_abs_state, const vector<int> &domain_sizes,
-    vector<vector<Split>> &splits, int op_id, RegressionStrategy &regression_strategy) {
+    vector<vector<Split>> &splits, int op_id, RegressionStrategyInstance &regression_strategy_instance) {
     /*
       For each fact in the concrete state that is not contained in the
       target abstract state, loop over all values in the domain of the
@@ -260,13 +259,13 @@ static void get_deviation_splits(
             // && !task.get_variables()[var].is_derived()
             ) {
             // Note: we could precompute the "wanted" vector, but not the split.
-            vector<int> wanted = regression_strategy.get_wanted_values(abs_state, target_abs_state, var, op_id);
+            vector<int> wanted = regression_strategy_instance.get_wanted_values(abs_state, target_abs_state, var, op_id);
             /* For derived variables, it can happen that the wanted vector is not
              * empty, but that it contains a single value and that this is the
              * only value in the abstract state 'a' we want to split. So we skip
              * derived variables with non-empty wanted vectors where |a[v]| = 1
              * wanted should never be empty if
-             * regression_strategy.get_wanted_vectors is implemented correctly
+             * regression_strategy_instance.get_wanted_vectors is implemented correctly
             */
             assert(!wanted.empty());
             if (wanted.size() < static_cast<size_t>(abs_state.get_cartesian_set().count(var))) {
@@ -375,7 +374,7 @@ unique_ptr<Split> FlawSearch::create_split(
                 abstract_state, fact_count, abstraction.get_state(target),
                 domain_sizes, splits,
                 // task_proxy,
-                op_id, *regression_strategy);
+                op_id, *regression_strategy_instance);
         }
     }
 
@@ -619,7 +618,7 @@ FlawSearch::FlawSearch(
     PickFlawedAbstractState pick_flawed_abstract_state, PickSplit pick_split,
     PickSplit tiebreak_split, int max_concrete_states_per_abstract_state,
     int max_state_expansions,
-    const shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
+    const shared_ptr<RegressionStrategy> &regression_strategy,
     const utils::LogProxy &log)
     : task_proxy(*task),
       domain_sizes(get_domain_sizes(task_proxy)),
@@ -628,7 +627,7 @@ FlawSearch::FlawSearch(
       split_selector(task, pick_split, tiebreak_split, log.is_at_least_debug()),
       rng(rng),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
-      regression_strategy(regression_strategy_factory->compute_regression_strategy(task_proxy)),
+      regression_strategy_instance(regression_strategy->create(task_proxy)),
       max_concrete_states_per_abstract_state(
           max_concrete_states_per_abstract_state),
       max_state_expansions(max_state_expansions),

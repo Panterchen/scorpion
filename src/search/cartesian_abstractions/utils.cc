@@ -23,7 +23,7 @@ using namespace std;
 namespace cartesian_abstractions {
 class SubtaskGenerator;
 class ExtensionStrategy;
-class RegressionStrategyFactory;
+class RegressionStrategy;
 bool g_hacked_sort_transitions = false;
 
 static bool operator_applicable(
@@ -255,7 +255,7 @@ void add_common_cegar_options(plugins::Feature &feature) {
         "See detailed documentation for extension strategies.",
         "extend_naive()");
     // Regression strategy option.
-    feature.add_option<shared_ptr<RegressionStrategyFactory>>(
+    feature.add_option<shared_ptr<RegressionStrategy>>(
         "regression_strategy",
         "See detailed documentation for regression strategies.",
         "regress_naive()");

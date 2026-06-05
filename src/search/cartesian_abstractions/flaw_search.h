@@ -13,7 +13,6 @@
 
 #include <stack>
 
-#include "regression_strategy_factory.h"
 #include "regression_strategy.h"
 
 namespace utils {
@@ -45,7 +44,7 @@ class FlawSearch {
     const SplitSelector split_selector;
     utils::RandomNumberGenerator &rng;
     const PickFlawedAbstractState pick_flawed_abstract_state;
-    const std::unique_ptr<RegressionStrategy> regression_strategy;
+    const std::unique_ptr<RegressionStrategyInstance> regression_strategy_instance;
     const int max_concrete_states_per_abstract_state;
     const int max_state_expansions;
     mutable utils::LogProxy log;
@@ -98,7 +97,7 @@ public:
         PickFlawedAbstractState pick_flawed_abstract_state,
         PickSplit pick_split, PickSplit tiebreak_split,
         int max_concrete_states_per_abstract_state, int max_state_expansions,
-        const std::shared_ptr<RegressionStrategyFactory> &regression_strategy_factory,
+        const std::shared_ptr<RegressionStrategy> &regression_strategy,
         const utils::LogProxy &log);
 
     std::unique_ptr<Split> get_split(const utils::CountdownTimer &cegar_timer);

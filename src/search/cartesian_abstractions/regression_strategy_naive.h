@@ -22,18 +22,44 @@ class TaskProxy;
 class CartesianSet;
 
 namespace cartesian_abstractions {
-class RegressionStrategyNaive : public RegressionStrategy {
+
+/*
+ * Instance: calculates naive regression approximation as a Cartesian set.
+ */
+
+class RegressionStrategyNaiveInstance : public RegressionStrategyInstance {
     const VariablesProxy variables;
     std::vector<std::vector<FactPair>> preconditions_by_operator;
     std::vector<std::vector<FactPair>> postconditions_by_operator;
 
 public:
-    RegressionStrategyNaive(const VariablesProxy &variables, const OperatorsProxy &operators);
-    virtual ~RegressionStrategyNaive() override = default;
-    virtual CartesianSet get_regression(const CartesianSet &a, int operator_id) override;
-    virtual std::vector<int> get_regression_values(const CartesianSet &a, int variable, int operator_id) override;
-    virtual std::vector<int> get_wanted_values(const AbstractState &a, const AbstractState &t, int variable, int operator_id);
+    explicit RegressionStrategyNaiveInstance(const VariablesProxy &variables,
+        const OperatorsProxy &operators);
+    virtual ~RegressionStrategyNaiveInstance() override = default;
+    virtual CartesianSet get_regression(const CartesianSet &a, int operator_id)
+    override;
+    virtual std::vector<int> get_regression_values(const CartesianSet &a,
+        int variable, int operator_id) override;
+    virtual std::vector<int> get_wanted_values(const AbstractState &a,
+        const AbstractState &t, int variable, int operator_id);
 };
+
+/*
+ * Generator: creates RegressionStrategyNaiveInstance objects
+ * Plugin name: regress_naive
+ */
+
+class RegressionStrategyNaive : public RegressionStrategy {
+protected:
+    virtual std::string name() const override;
+    virtual void dump_strategy_specific_options() const override;
+public:
+    explicit RegressionStrategyNaive(utils::Verbosity verbosity);
+    virtual ~RegressionStrategyNaive() override = default;
+    virtual std::unique_ptr<RegressionStrategyInstance> create(
+        const TaskProxy &task_proxy) const override;
+};
+
 }
 
 #endif

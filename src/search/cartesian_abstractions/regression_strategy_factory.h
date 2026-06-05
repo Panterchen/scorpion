@@ -16,15 +16,15 @@ class Feature;
 namespace cartesian_abstractions {
 class RegressionStrategy;
 
-class RegressionStrategyFactory {
+class RegressionStrategy {
 protected:
     mutable utils::LogProxy log;
 
     virtual std::string name() const = 0;
     virtual void dump_strategy_specific_options() const = 0;
 public:
-    RegressionStrategyFactory(utils::Verbosity verbosity);
-    virtual ~RegressionStrategyFactory() = default;
+    RegressionStrategy(utils::Verbosity verbosity);
+    virtual ~RegressionStrategy() = default;
     void dump_options() const;
     virtual std::unique_ptr<RegressionStrategy> compute_regression_strategy(
         const TaskProxy &task_proxy) const = 0;

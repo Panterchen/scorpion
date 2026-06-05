@@ -7,11 +7,11 @@
 using namespace std;
 
 namespace cartesian_abstractions {
-RegressionStrategyFactory::RegressionStrategyFactory(utils::Verbosity verbosity)
+RegressionStrategy::RegressionStrategyFactory(utils::Verbosity verbosity)
     : log(utils::get_log_for_verbosity(verbosity)) {
 }
 
-void RegressionStrategyFactory::dump_options() const {
+void RegressionStrategy::dump_options() const {
     if (log.is_at_least_normal()) {
         log << "Regression strategy options:" << endl;
         log << "Type: " << name() << endl;
@@ -29,7 +29,7 @@ tuple<utils::Verbosity> get_regression_strategy_arguments_from_options(
 }
 
 static class RegressionStrategyFactoryCategoryPlugin
-    : public plugins::TypedCategoryPlugin<RegressionStrategyFactory> {
+    : public plugins::TypedCategoryPlugin<RegressionStrategy> {
 public:
     RegressionStrategyFactoryCategoryPlugin()
         : TypedCategoryPlugin("RegressionStrategy") {
