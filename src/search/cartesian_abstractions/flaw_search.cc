@@ -6,6 +6,7 @@
 #include "shortest_paths.h"
 #include "split_selector.h"
 #include "regression_strategy.h"
+#include "extension_strategy.h"
 #include "transition_system.h"
 #include "utils.h"
 #include "../state_registry.h"
@@ -229,7 +230,8 @@ using CompactFactMap = phmap::flat_hash_map<FactPair, int, FactPairHash>;
 static void get_deviation_splits(
     const AbstractState &abs_state, const CompactFactMap &fact_count,
     const AbstractState &target_abs_state, const vector<int> &domain_sizes,
-    vector<vector<Split>> &splits, int op_id, RegressionStrategyInstance &regression_strategy_instance) {
+    vector<vector<Split>> &splits, int op_id,
+    RegressionStrategyInstance &regression_strategy_instance) {
     /*
       For each fact in the concrete state that is not contained in the
       target abstract state, loop over all values in the domain of the
@@ -370,6 +372,8 @@ unique_ptr<Split> FlawSearch::create_split(
         }
 
         for (const auto &[target, fact_count] : fact_count_by_target) {
+            regression_strategy_instance->prepare(
+                abstraction.get_state(target).get_cartesian_set(), op_id);
             get_deviation_splits(
                 abstract_state, fact_count, abstraction.get_state(target),
                 domain_sizes, splits,
@@ -618,6 +622,7 @@ FlawSearch::FlawSearch(
     PickFlawedAbstractState pick_flawed_abstract_state, PickSplit pick_split,
     PickSplit tiebreak_split, int max_concrete_states_per_abstract_state,
     int max_state_expansions,
+    const shared_ptr<ExtensionStrategy> &extension_strategy,
     const shared_ptr<RegressionStrategy> &regression_strategy,
     const utils::LogProxy &log)
     : task_proxy(*task),
@@ -627,7 +632,8 @@ FlawSearch::FlawSearch(
       split_selector(task, pick_split, tiebreak_split, log.is_at_least_debug()),
       rng(rng),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
-      regression_strategy_instance(regression_strategy->create(task_proxy)),
+      regression_strategy_instance(regression_strategy->create(task_proxy,
+          extension_strategy)),
       max_concrete_states_per_abstract_state(
           max_concrete_states_per_abstract_state),
       max_state_expansions(max_state_expansions),

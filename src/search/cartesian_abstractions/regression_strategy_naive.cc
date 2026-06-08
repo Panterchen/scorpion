@@ -138,7 +138,8 @@ RegressionStrategyNaive::RegressionStrategyNaive(utils::Verbosity verbosity)
 }
 
 unique_ptr<RegressionStrategyInstance> RegressionStrategyNaive::create(
-    const TaskProxy &task_proxy) const {
+    const TaskProxy &task_proxy,
+    const shared_ptr<ExtensionStrategy> &) const {
     return make_unique<RegressionStrategyNaiveInstance>(
         task_proxy.get_variables(), task_proxy.get_operators());
 }

@@ -57,7 +57,8 @@ public:
     explicit RegressionStrategyNaive(utils::Verbosity verbosity);
     virtual ~RegressionStrategyNaive() override = default;
     virtual std::unique_ptr<RegressionStrategyInstance> create(
-        const TaskProxy &task_proxy) const override;
+        const TaskProxy &task_proxy,
+        const std::shared_ptr<ExtensionStrategy> &extension_strategy) const override;
 };
 
 }

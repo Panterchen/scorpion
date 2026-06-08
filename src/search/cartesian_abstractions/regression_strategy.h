@@ -4,11 +4,14 @@
 #include <utility>
 #include "cartesian_set.h"
 #include "abstract_state.h"
+#include "extension_strategy.h"
 
 #include "../utils/logging.h"
 
 #include <memory>
 #include <string>
+#include <optional>
+
 
 class TaskProxy;
 
@@ -43,6 +46,7 @@ class RegressionStrategyInstance {
 public:
     explicit RegressionStrategyInstance();
     virtual ~RegressionStrategyInstance() = default;
+    virtual void prepare(const CartesianSet &, int) {} // no-op function used for composed regression
     // the first two functions can be used to explicitly calculate the regression
     virtual CartesianSet get_regression(const CartesianSet &a, int operator_id) = 0;
     virtual std::vector<int> get_regression_values(const CartesianSet &a, int variable, int operator_id) = 0;
@@ -66,7 +70,8 @@ public:
     virtual ~RegressionStrategy() = default;
     void dump_options() const;
     virtual std::unique_ptr<RegressionStrategyInstance> create(
-        const TaskProxy &task_proxy) const = 0;
+        const TaskProxy &task_proxy,
+        const std::shared_ptr<ExtensionStrategy> &extension_strategy) const = 0;
 };
 
 extern void add_regression_strategy_options_to_feature(plugins::Feature &feature);

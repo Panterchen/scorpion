@@ -58,7 +58,7 @@ CEGAR::CEGAR(
     flaw_search = make_unique<FlawSearch>(
         task, *abstraction, *shortest_paths, rng, pick_flawed_abstract_state,
         pick_split, tiebreak_split, max_concrete_states_per_abstract_state,
-        max_state_expansions, regression_strategy,
+        max_state_expansions, extension_strategy, regression_strategy,
         log);
 
     if (log.is_at_least_normal()) {
