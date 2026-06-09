@@ -262,14 +262,23 @@ static void get_deviation_splits(
             ) {
             // Note: we could precompute the "wanted" vector, but not the split.
             vector<int> wanted = regression_strategy_instance.get_wanted_values(abs_state, target_abs_state, var, op_id);
+            if (wanted.empty()) {
+                /* With composed regression, the extended regression of t under op can
+                 * determine a derived variable value that is incompatible with a[v],
+                 * giving an empty intersection. This means a cannot reach t via op
+                 * for this derived variable — skip this split candidate.
+                 * (With naive regression this cannot happen since wanted = a[v].)
+                 * It should never happen for basic variables.
+                 */
+                assert(variables[var].is_derived());
+                continue;
+            }
+            // assert(!wanted.empty());
             /* For derived variables, it can happen that the wanted vector is not
              * empty, but that it contains a single value and that this is the
              * only value in the abstract state 'a' we want to split. So we skip
              * derived variables with non-empty wanted vectors where |a[v]| = 1
-             * wanted should never be empty if
-             * regression_strategy_instance.get_wanted_vectors is implemented correctly
             */
-            assert(!wanted.empty());
             if (wanted.size() < static_cast<size_t>(abs_state.get_cartesian_set().count(var))) {
                 // remove degenerate splits on derived variables
                 add_split(splits, Split(abs_state.get_id(), var, fact.value,
