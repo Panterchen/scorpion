@@ -41,7 +41,7 @@ CEGAR::CEGAR(
               : INF),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
       transition_rewirer(
-          make_shared<TransitionRewirer>(task_proxy, extension_strategy)),
+          make_shared<TransitionRewirer>(task_proxy, extension_strategy, regression_strategy)),
       abstraction(make_unique<Abstraction>(
           task, transition_rewirer, transition_representation, log)),
       timer(max_time),

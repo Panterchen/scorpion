@@ -33,12 +33,17 @@ void TransitionSystem::add_loops_in_trivial_abstraction() {
 
 void TransitionSystem::rewire(
     const AbstractStates &states, int v_id, const AbstractState &v1,
-    const AbstractState &v2, int var) {
+    const AbstractState &v2, int var, utils::LogProxy &log) {
     enlarge_vectors_by_one();
+
+    if (log.is_at_least_debug()) { // run consistency check on new states (w.r.t. derived variable domains)
+        rewirer.consistency_check(v1, v2);
+    }
 
     num_non_loops -= (incoming[v_id].size() + outgoing[v_id].size());
 
-    rewirer.rewire_transitions(incoming, outgoing, states, v_id, v1, v2, var);
+    rewirer.rewire_transitions(incoming, outgoing, states, v_id, v1, v2,
+        var);
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
     num_non_loops += incoming[v1_id].size() + incoming[v2_id].size() +

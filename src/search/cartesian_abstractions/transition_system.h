@@ -51,7 +51,7 @@ public:
     // Update transition system after v has been split for var into v1 and v2.
     void rewire(
         const AbstractStates &states, int v_id, const AbstractState &v1,
-        const AbstractState &v2, int var);
+        const AbstractState &v2, int var, utils::LogProxy &log);
 
     const std::deque<Transitions> &get_incoming_transitions() const;
     const std::deque<Transitions> &get_outgoing_transitions() const;

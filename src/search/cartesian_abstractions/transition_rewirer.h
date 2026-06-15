@@ -5,6 +5,7 @@
 
 #include "../utils/collections.h"
 #include "extension_strategy.h"
+#include "regression_strategy.h"
 
 #include <cassert>
 #include <deque>
@@ -17,11 +18,13 @@ class TaskProxy;
 
 namespace cartesian_abstractions {
 class ExtensionStrategy;
+class RegressionStrategy;
 
 class TransitionRewirer {
 
     const VariablesProxy vars;
     std::unique_ptr<ExtensionStrategyInstance> extension_strategy_instance;
+    std::unique_ptr<RegressionStrategyInstance> regression_strategy_instance;
 
     const std::vector<std::vector<FactPair>> preconditions_by_operator;
     const std::vector<std::vector<FactPair>> postconditions_by_operator;
@@ -39,9 +42,11 @@ class TransitionRewirer {
         const AbstractState &v2, int var) const;
     CartesianSet update_cartesian_set(const CartesianSet &a, int op_id) const;
     bool conflict_derived_domains(const CartesianSet &a, int op_id, const CartesianSet &b) const;
+    bool precondition_derived_conflict(const CartesianSet &a, int op_id) const;
 
 public:
-    explicit TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategy> &extension_strategy);
+    explicit TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategy> &extension_strategy,
+        const std::shared_ptr<RegressionStrategy> &regression_strategy);
 
     void rewire_transitions(
         std::deque<Transitions> &incoming, std::deque<Transitions> &outgoing,
@@ -70,6 +75,9 @@ public:
     }
 
     int get_num_operators() const;
+
+    std::pair<bool, bool> consistency_check(const AbstractState &v1, const AbstractState &v2) const;
+    void log_new_transition(const AbstractState &source, const AbstractState &target, int op) const;
 };
 }
 

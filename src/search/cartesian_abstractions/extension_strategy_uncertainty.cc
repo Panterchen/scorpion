@@ -54,9 +54,9 @@ CartesianSet ExtensionStrategyUncertaintyInstance::get_extension(
                         if (unsat_body_atoms[r.get_id()] == 0) {
                             int head_id = r.get_effects()[0].get_fact().get_var_id();
                             result.remove(head_id, 0); // remove false value for derived variable as axiom fires and makes it true
-                            if (result.count(head_id) == 0) { // this should never happen if derived variables are initialized with full domain in a
+                            if (result.count(head_id) == 0) {
                                 std::cout << "var " << head_id <<  "conflict!!" << a << "Unreachable: derived variable domain emptied" << std::endl;
-                                return result; // conflict with extension, empty domain for derived varibale
+                                return result; // conflict with extension, empty domain for derived variable
                             }
                             enqueue(fact_queue, seen_vars, FactPair(head_id, 1), true);
                         }
@@ -76,9 +76,9 @@ CartesianSet ExtensionStrategyUncertaintyInstance::get_extension(
                         unsat_axioms.insert(r.get_id());
                         if (supporting_axioms[head_id] == 0) {
                             result.remove(head_id, 1); // remove true value for derived variable as no axiom can fire
-                            if (result.count(head_id) == 0) { // this should never happen if derived variables are initialized with full domain in a
+                            if (result.count(head_id) == 0) {
                                 std::cout << "var " << head_id <<  "conflict!!" << a << "Unreachable: derived variable domain emptied" << std::endl;
-                                return result; // conflict with extension, empty domain for derived varibale
+                                return result; // conflict with extension, empty domain for derived variable
                             }
                             enqueue(fact_queue, seen_vars, FactPair(head_id, 0), true);
                         }

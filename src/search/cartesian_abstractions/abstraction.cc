@@ -250,7 +250,7 @@ pair<int, int> Abstraction::refine(
     }
 
     if (transition_system) {
-        transition_system->rewire(states, v_id, *v1, *v2, var);
+        transition_system->rewire(states, v_id, *v1, *v2, var, log);
     }
 
     states.emplace_back();

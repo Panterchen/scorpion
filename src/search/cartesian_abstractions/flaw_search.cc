@@ -230,7 +230,7 @@ using CompactFactMap = phmap::flat_hash_map<FactPair, int, FactPairHash>;
 static void get_deviation_splits(
     const AbstractState &abs_state, const CompactFactMap &fact_count,
     const AbstractState &target_abs_state, const vector<int> &domain_sizes,
-    vector<vector<Split>> &splits, int op_id,
+    vector<vector<Split>> &splits, TaskProxy task, int op_id,
     RegressionStrategyInstance &regression_strategy_instance) {
     /*
       For each fact in the concrete state that is not contained in the
@@ -270,7 +270,7 @@ static void get_deviation_splits(
                  * (With naive regression this cannot happen since wanted = a[v].)
                  * It should never happen for basic variables.
                  */
-                assert(variables[var].is_derived());
+                assert(task.get_variables()[var].is_derived());
                 continue;
             }
             // assert(!wanted.empty());
@@ -385,8 +385,7 @@ unique_ptr<Split> FlawSearch::create_split(
                 abstraction.get_state(target).get_cartesian_set(), op_id);
             get_deviation_splits(
                 abstract_state, fact_count, abstraction.get_state(target),
-                domain_sizes, splits,
-                // task_proxy,
+                domain_sizes, splits, task_proxy,
                 op_id, *regression_strategy_instance);
         }
     }
