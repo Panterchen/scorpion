@@ -104,8 +104,15 @@ vector<int> RegressionStrategyComposedInstance::get_wanted_values(
         }
     }
     if (wanted.empty()) {
+        CartesianSet ext_a = extension_instance->get_extension(a.get_cartesian_set());
+        std::cout << "Abstract State ID: " << a.get_id() << ", " << a.get_cartesian_set() << std::endl;
         std::cout << "No wanted values found for var " << variable << std::endl;
         std::cout << "var domain in a: " << a.get_cartesian_set().get_values(variable) << std::endl;
+        if (ext_a.get_values(variable).empty()) {
+            std::cout << "var domain in ext_a is empty." << std::endl;
+        } else {
+            std::cout << "var domain in ext_a: " << extension_instance->get_extension(a.get_cartesian_set()).get_values(variable) << std::endl;
+        }
         std::cout << "var domain in ext_regr: " << ext_regr.get_values(variable) << std::endl;
     }
     return wanted;

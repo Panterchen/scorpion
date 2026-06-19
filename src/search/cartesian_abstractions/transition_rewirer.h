@@ -76,8 +76,12 @@ public:
 
     int get_num_operators() const;
 
-    std::pair<bool, bool> consistency_check(const AbstractState &v1, const AbstractState &v2) const;
-    void log_new_transition(const AbstractState &source, const AbstractState &target, int op) const;
+    std::pair<bool, bool> consistency_check(
+        const AbstractState &v1, const AbstractState &v2) const;
+    bool check_transition_validity(
+        const AbstractState &source, const AbstractState &target, int op) const;
+    bool check_regression_intersection(
+        const AbstractState &source, const AbstractState &target, int op) const;
 };
 }
 

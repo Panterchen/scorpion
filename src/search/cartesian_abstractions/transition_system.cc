@@ -36,9 +36,7 @@ void TransitionSystem::rewire(
     const AbstractState &v2, int var, utils::LogProxy &log) {
     enlarge_vectors_by_one();
 
-    if (log.is_at_least_debug()) { // run consistency check on new states (w.r.t. derived variable domains)
-        rewirer.consistency_check(v1, v2);
-    }
+    rewirer.consistency_check(v1, v2);
 
     num_non_loops -= (incoming[v_id].size() + outgoing[v_id].size());
 

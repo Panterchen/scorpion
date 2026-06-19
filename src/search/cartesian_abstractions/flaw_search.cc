@@ -261,6 +261,8 @@ static void get_deviation_splits(
             // && !task.get_variables()[var].is_derived()
             ) {
             // Note: we could precompute the "wanted" vector, but not the split.
+            // TODO should we skip flaws where the variable domain is already
+            // only size 1? TODO
             vector<int> wanted = regression_strategy_instance.get_wanted_values(abs_state, target_abs_state, var, op_id);
             if (wanted.empty()) {
                 /* With composed regression, the extended regression of t under op can
@@ -270,6 +272,15 @@ static void get_deviation_splits(
                  * (With naive regression this cannot happen since wanted = a[v].)
                  * It should never happen for basic variables.
                  */
+                OperatorProxy op_proxy = task.get_operators()[op_id];
+                std::cout << "Operator ID: " << op_id << " Name: " << op_proxy.get_name() << "\n    Preconditions: " << std::endl;
+                for (auto pre : op_proxy.get_preconditions()) {
+                    std::cout << "        Variable: " << pre.get_var_id() << ", Value: " << pre.get_value() << std::endl;
+                }
+                std::cout << "    Effects:" << std::endl;
+                for (auto eff : op_proxy.get_effects()) {
+                    std::cout << "        Variable: " << eff.get_fact().get_var_id() << ", Value: " << eff.get_fact().get_value() << std::endl;
+                }
                 assert(task.get_variables()[var].is_derived());
                 continue;
             }
