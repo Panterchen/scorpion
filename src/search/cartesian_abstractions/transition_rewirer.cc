@@ -35,13 +35,13 @@ static void add_transition(
             Transition(op, src)) == incoming[dest].end());
     outgoing[src].emplace_back(op, dest);
     incoming[dest].emplace_back(op, src);
-    std::cout << "added transition from " << src << " to " << dest << " via " << op << std::endl;     // TODO : remove log later
+    //std::cout << "added transition from " << src << " to " << dest << " via " << op << std::endl;     // TODO : remove log later
 }
 
 static void add_loop(deque<Loops> &loops, int state_id, int op_id) {
     assert(utils::in_bounds(state_id, loops));
     loops[state_id].push_back(op_id);
-    std::cout << "added loop on " << state_id << " with op " << op_id << std::endl;     // TODO : remove log later
+    //std::cout << "added loop on " << state_id << " with op " << op_id << std::endl;     // TODO : remove log later
 }
 
 TransitionRewirer::TransitionRewirer(const TaskProxy &task,
@@ -83,6 +83,8 @@ void TransitionRewirer::rewire_incoming_transitions(
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
 
+    pair<bool, bool> cons = consistency_check(v1, v2);
+
     Transitions old_incoming = move(incoming[v_id]);
 
     unordered_set<int> updated_states;
@@ -98,19 +100,27 @@ void TransitionRewirer::rewire_incoming_transitions(
         
         int op_id = transition.op_id;
         int u_id = transition.target_id;
+
+        cout << "Rewiring incoming transition for op " << op_id << " from state " << u_id << endl;
+
         const AbstractState &u = *states[u_id];
 
+        bool u_v1_valid = cons.first && check_transition_validity(u, v1, op_id);
+        bool u_v2_valid = cons.second && check_transition_validity(u, v2, op_id);
+        bool added_u_v1 = false;
+        bool added_u_v2 = false;
+        /*
         if (check_transition_validity(u, v1, op_id)) {
             std::cout << "u -> v1 valid, u: " << u_id  << ", op: " << op_id << ", v1: " << v1_id << std::endl;
         }
         if (check_transition_validity(u, v2, op_id)) {
             std::cout << "u -> v2 valid, u: " << u_id << ", op: " << op_id << ", v2: " << v2_id << std::endl;
-        }
+        }*/
 
         int post = UNDEFINED;
         bool derived = vars[var].is_derived(); // check if var is derived
-        bool derived_conflict_v1 = conflict_derived_domains(u.get_cartesian_set(), op_id, v1.get_cartesian_set());
-        bool derived_conflict_v2 = conflict_derived_domains(u.get_cartesian_set(), op_id, v2.get_cartesian_set());
+        bool derived_conflict_v1 = !cons.first || conflict_derived_domains(u.get_cartesian_set(), op_id, v1.get_cartesian_set());
+        bool derived_conflict_v2 = !cons.second || conflict_derived_domains(u.get_cartesian_set(), op_id, v2.get_cartesian_set());
 
         if (derived) {
             // determine derived variable value
@@ -125,30 +135,69 @@ void TransitionRewirer::rewire_incoming_transitions(
             // op has no precondition and no effect on var.
             bool u_and_v1_intersect = derived || u.domain_subsets_intersect(v1, var);
             if (u_and_v1_intersect && !derived_conflict_v1) {
-                // check_transition_validity(u, v1, op_id);
                 add_transition(incoming, outgoing, u_id, op_id, v1_id);
+                added_u_v1 = true;
             }
             /* If u and v1 don't intersect, we must add the other transition
             and can avoid an intersection test. */
             if (!derived_conflict_v2 && (derived || !u_and_v1_intersect || u.domain_subsets_intersect(v2, var))) {
-                // check_transition_validity(u, v2, op_id);
                 add_transition(incoming, outgoing, u_id, op_id, v2_id);
-            }
-        } else if (v1.contains(var, post)) {
-            // op can only end in v1.
-            if (!derived_conflict_v1) {
-                // check_transition_validity(u, v1, op_id);
-                add_transition(incoming, outgoing, u_id, op_id, v1_id);
+                added_u_v2 = true;
             }
         } else {
-            // op can only end in v2.
-            assert(v2.contains(var, post));
-            if (!derived_conflict_v2) {
-                // check_transition_validity(u, v2, op_id);
-                add_transition(incoming, outgoing, u_id, op_id, v2_id);
+            if (derived) {
+                if (!derived_conflict_v1) {
+                    add_transition(incoming, outgoing, u_id, op_id, v1_id);
+                    added_u_v1 = true;
+                }
+                if (!derived_conflict_v2) {
+                    add_transition(incoming, outgoing, u_id, op_id, v2_id);
+                    added_u_v2 = true;
+                }
+            } else {
+                if (v1.contains(var, post)) {
+                    // op can only end in v1.
+                    if (!derived_conflict_v1) {
+                        add_transition(incoming, outgoing, u_id, op_id, v1_id);
+                        added_u_v1 = true;
+                    }
+                } else {
+                    // op can only end in v2.
+                    assert(v2.contains(var, post));
+                    if (!derived_conflict_v2) {
+                        add_transition(incoming, outgoing, u_id, op_id, v2_id);
+                        added_u_v2 = true;
+                    }
+                }
             }
         }
-
+        bool mistake_v1 = ((added_u_v1 && !u_v1_valid) || (!added_u_v1 && u_v1_valid) );
+        bool mistake_v2 = ((added_u_v2 && !u_v2_valid) || (!added_u_v2 && u_v2_valid));
+        if (added_u_v2 && !u_v2_valid) {
+            std::cout << "Transition u (" << u_id << ") - op (" << op_id << ") -> v2 ("<< v2_id <<") invalid but added." << std::endl;
+        }
+        if (!added_u_v2 && u_v2_valid) {
+            std::cout << "Transition u (" << u_id << ") - op (" << op_id << ") -> v2 ("<< v2_id <<") valid but not added." << std::endl;
+        }
+        if (added_u_v1 && !u_v1_valid) {
+            std::cout << "Transition u (" << u_id << ") - op (" << op_id << ") -> v1 ("<< v1_id <<") invalid but added." << std::endl;
+        }
+        if (!added_u_v1 && u_v1_valid) {
+            std::cout << "Transition u (" << u_id << ") - op (" << op_id << ") -> v1 ("<< v1_id <<") valid but not added." << std::endl;
+        }
+        if (mistake_v1 || mistake_v2) {
+            // print information about transition where stuff goes wrong...
+            std::cout << "Variable: " << var << ", derived ? " << derived << ", postcondition[var]: " << post << std::endl;
+            std::cout << "u cartesian set " << u.get_cartesian_set() << std::endl;
+            if (mistake_v1) {
+                std::cout << "v1 cartesian set " << v1.get_cartesian_set() << std::endl;
+                std::cout << "derived conflict? " << derived_conflict_v1 << std::endl;
+            }
+            if (mistake_v2) {
+                std::cout << "v2 cartesian set " << v2.get_cartesian_set() << std::endl;
+                std::cout << "derived conflict? " << derived_conflict_v2 << std::endl;
+            }
+        }
     }
 }
 
@@ -161,6 +210,11 @@ void TransitionRewirer::rewire_outgoing_transitions(
        v->w we need to add transitions v1->w, v2->w, or both. */
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
+
+    pair<bool, bool> cons = consistency_check(v1, v2);
+
+    cout << "V1 (" << v1_id << ") consistent: " << cons.first << endl;
+    cout << "V2 (" << v2_id << ") consistent: " << cons.second << endl;
 
     Transitions old_outgoing = move(outgoing[v_id]);
 
@@ -176,14 +230,24 @@ void TransitionRewirer::rewire_outgoing_transitions(
     for (const Transition &transition : old_outgoing) {
         int op_id = transition.op_id;
         int w_id = transition.target_id;
+
+        cout << "Rewiring outgoing transition for op " << op_id << " to state " << w_id << endl;
+
         const AbstractState &w = *states[w_id];
 
+        bool v1_w_valid = check_transition_validity(v1, w, op_id);
+        bool v2_w_valid = check_transition_validity(v2, w, op_id);
+
+        bool added_v1_w = false;
+        bool added_v2_w = false;
+
+        /*
         if (check_transition_validity(v1, w, op_id)) {
             std::cout << "v1 -> w valid, v1: " << v1_id  << ", op: " << op_id << ", w: " << w_id << std::endl;
         }
         if (check_transition_validity(v2, w, op_id)) {
             std::cout << "v2 -> w valid, v2: " << v2_id << ", op: " << op_id << ", w: " << w_id << std::endl;
-        }
+        }*/
 
         int pre = get_precondition_value(op_id, var);
         int post = get_postcondition_value(op_id, var);
@@ -194,9 +258,9 @@ void TransitionRewirer::rewire_outgoing_transitions(
         bool pre_derived_conflict_v2 = (derived ? pre_derived_conflict_v1 :
             precondition_derived_conflict(v2.get_cartesian_set(), op_id));
         // check if v1 or v2 have a conflict on the derived postconditions with w
-        bool derived_conflict_v1 = pre_derived_conflict_v1 ||
+        bool derived_conflict_v1 = pre_derived_conflict_v1 || !cons.first ||
             conflict_derived_domains(v1.get_cartesian_set(), op_id, w.get_cartesian_set());
-        bool derived_conflict_v2 = pre_derived_conflict_v2 ||
+        bool derived_conflict_v2 = pre_derived_conflict_v2 || !cons.second ||
             conflict_derived_domains(v2.get_cartesian_set(), op_id, w.get_cartesian_set());
 
         // if (!derived) {
@@ -209,40 +273,68 @@ void TransitionRewirer::rewire_outgoing_transitions(
             // op has no precondition and no effect on var.
             bool v1_and_w_intersect = v1.domain_subsets_intersect(w, var);
             if (!derived_conflict_v1 && v1_and_w_intersect) {
-                // check_transition_validity(v1, w, op_id);
+                if (!v1_w_valid) {
+                    std::cout << "Transition v1 (" << v1_id << ") - op (" << op_id << ") -> w ("<< w_id <<") invalid but added." << std::endl;
+                }
                 add_transition(incoming, outgoing, v1_id, op_id, w_id);
+                added_v1_w = true;
             }
             /* If v1 and w don't intersect, we must add the other transition
             and can avoid an intersection test. */
             if (!derived_conflict_v2 && (!v1_and_w_intersect || v2.domain_subsets_intersect(w, var))) {
-                // check_transition_validity(v2, w, op_id);
+                if (!v2_w_valid) {
+                    std::cout << "Transition v2 (" << v2_id << ") - op (" << op_id << ") -> w ("<< w_id <<") invalid but added." << std::endl;
+                }
                 add_transition(incoming, outgoing, v2_id, op_id, w_id);
+                added_v2_w = true;
             }
         } else if (pre == UNDEFINED) {
             // op has no precondition, but an effect on var.
             if (!derived_conflict_v1){
-                // check_transition_validity(v1, w, op_id);
+                if (!v1_w_valid) {
+                    std::cout << "Transition v1 (" << v1_id << ") - op (" << op_id << ") -> w ("<< w_id <<") invalid but added." << std::endl;
+                }
                 add_transition(incoming, outgoing, v1_id, op_id, w_id);
+                added_v1_w = true;
             }
             if (!derived_conflict_v2){
-                // check_transition_validity(v2, w, op_id);
+                if (!v2_w_valid) {
+                    std::cout << "Transition v2 (" << v2_id << ") - op (" << op_id << ") -> w ("<< w_id <<") invalid but added." << std::endl;
+                }
                 add_transition(incoming, outgoing, v2_id, op_id, w_id);
+                added_v2_w = true;
             }
         } else if (v1.contains(var, pre)) {
             // op can only start in v1.
             if (!derived_conflict_v1){
-                // check_transition_validity(v1, w, op_id);
+                if (!v1_w_valid) {
+                    std::cout << "Transition v1 (" << v1_id << ") - op (" << op_id << ") -> w ("<< w_id <<") invalid but added." << std::endl;
+                }
                 add_transition(incoming, outgoing, v1_id, op_id, w_id);
+                added_v1_w = true;
             }
         } else{
             // op can only start in v2.
             if (!derived_conflict_v2){
-                //cout << "Adding transition from " << v2_id << " to " << w_id << " via op " << task.get_operators()[op_id].get_name() << endl;
-                // check_transition_validity(v2, w, op_id);
+                if (!v2_w_valid) {
+                    std::cout << "Transition v2 (" << v2_id << ") - op (" << op_id << ") -> w ("<< w_id <<") invalid but added." << std::endl;
+                }
                 add_transition(incoming, outgoing, v2_id, op_id, w_id);
+                added_v2_w = true;
             }
         }
-    
+        if (added_v1_w && !v1_w_valid) {
+            std::cout << "Transition v1 (" << v1_id << ") - op (" << op_id << ") -> w ("<< w_id <<") invalid but added." << std::endl;
+        }
+        if (!added_v1_w && v1_w_valid) {
+            std::cout << "Transition v1 (" << v1_id << ") - op (" << op_id << ") -> w ("<< w_id <<") valid but not added." << std::endl;
+        }
+        if (added_v2_w && !v2_w_valid) {
+            std::cout << "Transition v2 (" << v2_id << ") - op (" << op_id << ") -> w ("<< w_id <<") invalid but added." << std::endl;
+        }
+        if (!added_v2_w && v2_w_valid) {
+            std::cout << "Transition v2 (" << v2_id << ") - op (" << op_id << ") -> w ("<< w_id <<") valid but not added." << std::endl;
+        }
     }
 }
 
@@ -250,6 +342,11 @@ void TransitionRewirer::rewire_loops(
     deque<Loops> &loops, deque<Transitions> &incoming,
     deque<Transitions> &outgoing, int v_id, const AbstractState &v1,
     const AbstractState &v2, int var) const {
+
+    pair<bool, bool> cons = consistency_check(v1, v2);
+
+    std::cout << "V1 " << v1.get_id() << " consistency: " << cons.first << std::endl;
+    std::cout << "V2 " << v2.get_id() << " consistency: " << cons.second << std::endl;
 
     Loops old_loops = move(loops[v_id]);
     assert(loops[v_id].empty());
@@ -260,7 +357,18 @@ void TransitionRewirer::rewire_loops(
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
     for (int op_id : old_loops) {
-        if (check_transition_validity(v1, v1, op_id)) {
+        cout << "Rewiring loop for op " << op_id << endl;
+
+        bool loop_v1_valid = check_transition_validity(v1, v1, op_id);
+        bool loop_v2_valid = check_transition_validity(v2, v2, op_id);
+        bool v1_v2_valid = check_transition_validity(v1, v2, op_id);
+        bool v2_v1_valid = check_transition_validity(v2, v1, op_id);
+
+        bool added_loop_v1 = false;
+        bool added_loop_v2 = false;
+        bool added_v1_v2 = false;
+        bool added_v2_v1 = false;
+        /*if (check_transition_validity(v1, v1, op_id)) {
             std::cout << "Loop v1 valid, v1: " << v1_id << ", op: " << op_id << std::endl;
         }
         if (check_transition_validity(v2, v2, op_id)) {
@@ -271,16 +379,16 @@ void TransitionRewirer::rewire_loops(
         }
         if (check_transition_validity(v2, v1, op_id)) {
             std::cout << "v2 -> v1 valid, v2: " << v2_id << ", op: " << op_id << ", v1: " << v1_id << std::endl;
-        }
+        }*/
 
         int pre = get_precondition_value(op_id, var);
 
         int post = UNDEFINED;
         bool derived = vars[var].is_derived(); // check if var is derived
-        bool derived_conflict_v1 = false;
-        bool derived_conflict_v2 = false;
-        bool derived_conflict_v1_to_v2 = false;
-        bool derived_conflict_v2_to_v1 = false;
+        bool derived_conflict_v1 = false || !cons.first;
+        bool derived_conflict_v2 = false || !cons.second;
+        bool derived_conflict_v1_to_v2 = false || !cons.first || !cons.second;
+        bool derived_conflict_v2_to_v1 = false || !cons.second || !cons.first;
 
         if (derived) {
             // derived value is the same for both v1 and v2 
@@ -288,30 +396,48 @@ void TransitionRewirer::rewire_loops(
             // however v1 and v2 only differ in var which is derived
             CartesianSet v1_cs = update_cartesian_set(v1.get_cartesian_set(), op_id);
             post = extension_strategy_instance->get_extension_value(v1_cs, var);
+
         } else {
             // determine basic variable post value
             post = get_postcondition_value(op_id, var);
-            
-            // conflicts, derived variable value is the same for v1 and v2, only var which is basic differs
-            // consider conflicts on preconditions (if there are preconditions on derived variables that could
-            // depend on the changed basic variable
-            bool pre_conflict_v1 = precondition_derived_conflict(v1.get_cartesian_set(), op_id);
-            bool pre_conflict_v2 = precondition_derived_conflict(v2.get_cartesian_set(), op_id);
-            // v1 and v2 are the same except for domain of basic variable. for conflict(a,o,b) we consider the basic variable domains of a and derived variable values of b 
-            derived_conflict_v1 = pre_conflict_v1 ||
-                conflict_derived_domains(v1.get_cartesian_set(), op_id, v1.get_cartesian_set());
-            derived_conflict_v2 = pre_conflict_v2 ||
-                conflict_derived_domains(v2.get_cartesian_set(), op_id, v2.get_cartesian_set());
-            derived_conflict_v1_to_v2 = pre_conflict_v1 ||
-                conflict_derived_domains(v1.get_cartesian_set(), op_id, v2.get_cartesian_set());
-            derived_conflict_v2_to_v1 = pre_conflict_v2 ||
-                conflict_derived_domains(v2.get_cartesian_set(), op_id, v1.get_cartesian_set());
         }
 
-        //cout << "Rewiring loop for op " << task.get_operators()[op_id].get_name() << endl;
-        //cout << "Precondition value: " << pre << ", Postcondition value: " << post << endl;
-        //cout << "var " << var << " is " << (derived ? "derived" : "basic") << endl;
-        //cout << "abstract state v1: " << v1.get_cartesian_set() << ", abstract state v2: " << v2.get_cartesian_set() << endl;
+        // conflicts, derived variable value is the same for v1 and v2, only var which is basic differs
+        // consider conflicts on preconditions (if there are preconditions on derived variables that could
+        // depend on the changed basic variable
+        bool pre_conflict_v1 = precondition_derived_conflict(v1.get_cartesian_set(), op_id);
+        bool pre_conflict_v2 = precondition_derived_conflict(v2.get_cartesian_set(), op_id);
+        // std::cout << "precondition conflict v1" << pre_conflict_v1 << std::endl;
+        // std::cout << "precondition conflict v2" << pre_conflict_v2 << std::endl;
+
+        // v1 and v2 are the same except for domain of basic variable. for conflict(a,o,b) we consider the basic variable domains of a and derived variable values of b
+        derived_conflict_v1 = pre_conflict_v1 || !cons.first ||
+            conflict_derived_domains(v1.get_cartesian_set(), op_id, v1.get_cartesian_set());
+        derived_conflict_v2 = pre_conflict_v2 || !cons.second ||
+            conflict_derived_domains(v2.get_cartesian_set(), op_id, v2.get_cartesian_set());
+        derived_conflict_v1_to_v2 = pre_conflict_v1 || !cons.first || !cons.second ||
+            conflict_derived_domains(v1.get_cartesian_set(), op_id, v2.get_cartesian_set());
+        derived_conflict_v2_to_v1 = pre_conflict_v2 || !cons.first || !cons.second ||
+            conflict_derived_domains(v2.get_cartesian_set(), op_id, v1.get_cartesian_set());
+
+        // std::cout << "derived_conflict_v1" << derived_conflict_v1 << std::endl;
+        // std::cout << "derived_conflict_v2" << derived_conflict_v2 << std::endl;
+        // std::cout << "derived_conflict_v1_to_v2" << derived_conflict_v1_to_v2 << std::endl;
+        // std::cout << "derived_conflict_v2_to_v1" << derived_conflict_v2_to_v1 << std::endl;
+
+        // cout << "Precondition value: " << pre << ", Postcondition value: " << post << endl;
+        // cout << "var " << var << " is " << (derived ? "derived" : "basic") << endl;
+        // if (cons.first) {
+        //     cout << "abstract state v1: " << v1.get_cartesian_set() << endl;
+        // } else {
+        //     cout << "abstract state v1: " << "inconsistent" << endl;
+        // }
+        // if (cons.second) {
+        //     cout << "abstract state v2: " << v2.get_cartesian_set() << endl;
+        // } else {
+        //     cout << "abstract state v2: " << "inconsistent" << endl;
+        // }
+        // cout << "abstract state v1: " << v1.get_cartesian_set() << ", abstract state v2: " << v2.get_cartesian_set() << endl;
 
         if (pre == UNDEFINED) {
             // op has no precondition on var --> it must start in v1 and v2.
@@ -321,39 +447,64 @@ void TransitionRewirer::rewire_loops(
 
                 if (!derived_conflict_v1){
                     add_loop(loops, v1_id, op_id);
+                    added_loop_v1 = true;
                 }
 
                 if (!derived_conflict_v2){
                     add_loop(loops, v2_id, op_id);
+                    added_loop_v2 = true;
                 }
 
                 // if var is derived we can possibly get all 4 combinations as derived values can change even without effect on var
                 if (derived) {
-                    // check_transition_validity(v1, v2, op_id);
-                    // check_transition_validity(v2, v1, op_id);
                     add_transition(incoming, outgoing, v1_id, op_id, v2_id);
                     add_transition(incoming, outgoing, v2_id, op_id, v1_id);
-                }
-            } else if (v2.contains(var, post)) {
-                // op must end in v2.
-
-                if (!derived_conflict_v1_to_v2) {  // derived_conflict_v1_to_v2 checked for conflict on v1-o->v2
-                    // check_transition_validity(v1, v2, op_id);
-                    add_transition(incoming, outgoing, v1_id, op_id, v2_id);
-                }
-                if (!derived_conflict_v2) {
-                    add_loop(loops, v2_id, op_id);
+                    added_v1_v2 = true;
+                    added_v2_v1 = true;
                 }
             } else {
-                // op must end in v1.
-                assert(v1.contains(var, post));
+                if (derived) {
+                    if (!derived_conflict_v1) {
+                        add_loop(loops, v1_id, op_id);
+                        added_loop_v1 = true;
+                    }
+                    if (!derived_conflict_v2) {
+                        add_loop(loops, v2_id, op_id);
+                        added_loop_v2 = true;
+                    }
+                    if (!derived_conflict_v1_to_v2) {
+                        add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                        added_v1_v2 = true;
+                    }
+                    if (!derived_conflict_v2_to_v1) {
+                        add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                        added_v2_v1 = true;
+                    }
+                } else {
+                    if (v2.contains(var, post)) {
+                        // op must end in v2.
 
-                if (!derived_conflict_v1){
-                    add_loop(loops, v1_id, op_id);
-                }
-                if (!derived_conflict_v2_to_v1) { // derived_conflict_v2_to_v1 checked for conflict v1-o->v2
-                    // check_transition_validity(v2, v1, op_id);
-                    add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                        if (!derived_conflict_v1_to_v2) {  // derived_conflict_v1_to_v2 checked for conflict on v1-o->v2
+                            add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                            added_v1_v2 = true;
+                        }
+                        if (!derived_conflict_v2) {
+                            add_loop(loops, v2_id, op_id);
+                            added_loop_v2 = true;
+                        }
+                    } else {
+                        // op must end in v1.
+                        assert(v1.contains(var, post));
+
+                        if (!derived_conflict_v1){
+                            add_loop(loops, v1_id, op_id);
+                            added_loop_v1 = true;
+                        }
+                        if (!derived_conflict_v2_to_v1) { // derived_conflict_v2_to_v1 checked for conflict v1-o->v2
+                            add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                            added_v2_v1 = true;
+                        }
+                    }
                 }
             }
         } else if (v1.contains(var, pre)) {
@@ -365,22 +516,24 @@ void TransitionRewirer::rewire_loops(
                 // var is derived and can end in both v1 and v2
                 if (!derived_conflict_v1) {
                     add_loop(loops, v1_id, op_id);
+                    added_loop_v1 = true;
                 }
                 if (!derived_conflict_v1_to_v2) {
-                    // check_transition_validity(v1, v2, op_id);
                     add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                    added_v1_v2 = true;
                 }
             } else if (v1.contains(var, post)) {
                 // op must end in v1.
                 if (!derived_conflict_v1){
                     add_loop(loops, v1_id, op_id);
+                    added_loop_v1 = true;
                 }
             } else {
                 // op must end in v2.
                 assert(v2.contains(var, post));
                 if (!derived_conflict_v1_to_v2){
-                    // check_transition_validity(v1, v2, op_id);
                     add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                    added_v1_v2 = true;
                 }
             }
         } else {
@@ -394,25 +547,55 @@ void TransitionRewirer::rewire_loops(
                 // var is derived and can end in both v1 and v2
                 if (!derived_conflict_v2) {
                     add_loop(loops, v2_id, op_id);
+                    added_loop_v2 = true;
                 }
                 if (!derived_conflict_v2_to_v1) {
-                    // check_transition_validity(v2, v1, op_id);
                     add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                    added_v2_v1 = true;
                 }
             } else if (v1.contains(var, post)) {
                 // op must end in v1.
                 if (!derived_conflict_v2_to_v1) {
-                    // check_transition_validity(v2, v1, op_id);
                     add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                    added_v2_v1 = true;
                 }
             } else {
                 // op must end in v2.
                 assert(v2.contains(var, post));
                 if (!derived_conflict_v2) {
                     add_loop(loops, v2_id, op_id);
+                    added_loop_v2 = true;
                 }
             }
         }
+        if (loop_v1_valid && !added_loop_v1) {
+            std::cout << "Loop v1 (" << v1_id << ") valid but not added" << std::endl;
+        }
+        if (!loop_v1_valid && added_loop_v1) {
+            std::cout << "Loop v1 (" << v1_id << ") invalid but added" << std::endl;
+        }
+        if (loop_v2_valid && !added_loop_v2) {
+            std::cout << "Loop v2 (" << v2_id << ") valid but not added" << std::endl;
+        }
+        if (!loop_v2_valid && added_loop_v2) {
+            std::cout << "Loop v2 (" << v2_id << ") invalid but added" << std::endl;
+        }
+        if (v1_v2_valid && !added_v1_v2) {
+            std::cout << "Transition v1 (" << v1_id << ") - op (" << op_id << ") -> v2 ("<< v2_id <<") valid but not added." << std::endl;
+        }
+        if (!v1_v2_valid && added_v1_v2) {
+            std::cout << "Transition v1 (" << v1_id << ") - op (" << op_id << ") -> v2 ("<< v2_id <<") invalid but added." << std::endl;
+        }
+        if (v2_v1_valid && !added_v2_v1) {
+            std::cout << "Transition v2 (" << v2_id << ") - op (" << op_id << ") -> v1 ("<< v1_id <<") valid but not added." << std::endl;
+        }
+        if (!v2_v1_valid && added_v2_v1) {
+            std::cout << "Transition v2 (" << v2_id << ") - op (" << op_id << ") -> v1 ("<< v1_id <<") invalid but added." << std::endl;
+        }
+        // if (added_loop_v1) std::cout << "Added loop v1 (" << v1_id << ")" << std::endl;
+        // if (added_loop_v2) std::cout << "Added loop v2 (" << v2_id << ")" << std::endl;
+        // if (added_v1_v2) std::cout << "Added v1 (" << v1_id << ") - op (" << op_id << ") -> v2 ("<< v2_id <<")" << std::endl;
+        // if (added_v2_v1) std::cout << "Added v2 (" << v2_id << ")  - op (" << op_id << ") -> v1 ("<< v1_id <<")" << std::endl;
     }
 }
 
@@ -445,13 +628,25 @@ CartesianSet TransitionRewirer::update_cartesian_set(const CartesianSet &a, int 
 bool TransitionRewirer::conflict_derived_domains(const CartesianSet &a, int op_id, const CartesianSet &b) const {
     
     CartesianSet extended_a_o = extension_strategy_instance->get_extension(update_cartesian_set(a, op_id));
+    CartesianSet extended_b = extension_strategy_instance->get_extension(b);
+    CartesianSet naive_extended_b = b;
+    for (VariableProxy var : vars) {
+        if (var.is_derived()) {
+            naive_extended_b.add_all(var.get_id());
+        }
+    }
+    naive_extended_b = extension_strategy_instance->get_extension(naive_extended_b);
+    // TODO: Figure out why the algorithm breaks if we don't use the naive extension for the check...
 
     for (VariableProxy var : vars){
-        if (var.is_derived() && !extended_a_o.intersects(b, var.get_id())) {
+        if (var.is_derived() && !extended_a_o.intersects(naive_extended_b, var.get_id())) {
+        // if (var.is_derived() && !extended_a_o.intersects(b, var.get_id())) {
             // std::cout << "var " << var.get_id() <<  " conflict!! " << std::endl;
             // std::cout << "a : " << a << ", o : " << op_id << std::endl;
             // std::cout << "ext_a_o : " << extended_a_o << std::endl;
             // std::cout << "b : " << b << std::endl;
+            // std::cout << "ext_b : " << extended_b << std::endl;
+            // std::cout << "naive_ext_b: " << naive_extended_b << std::endl;
             return true;
         }
     }
@@ -541,20 +736,25 @@ bool TransitionRewirer::check_transition_validity(const AbstractState &source, c
         int post_val = get_postcondition_value(op, var_id);
         if (!var.is_derived()) {
             if (pre_val != UNDEFINED && !source.contains(var_id, pre_val)) {
+                std::cout << source.get_id() << " to " << target.get_id() << " invalid reason 1 on" << var.get_id() << std::endl;
                 return false;
             }
             if (pre_val != post_val && !target.contains(var_id, post_val)) {
+                std::cout << source.get_id() << " to " << target.get_id() << " invalid reason 2 on" << var.get_id() << std::endl;
                 return false;
             }
             if (post_val == UNDEFINED && !source.get_cartesian_set().intersects(target.get_cartesian_set(), var_id)) {
+                std::cout << source.get_id() << " to " << target.get_id() << " invalid reason 3 on" << var.get_id() << std::endl;
                 return false;
             }
         }
     }
     if (precondition_derived_conflict(source.get_cartesian_set(), op)) {
+        std::cout << "Precondition conflict! for "<< source.get_id() << " to " << target.get_id() << std::endl;
         return false;
     }
     if (conflict_derived_domains(source.get_cartesian_set(), op, target.get_cartesian_set())) {
+        std::cout << "Conflict derived domains! for "<< source.get_id() << " to " << target.get_id() << std::endl;
         return false;
     }
     return true;
