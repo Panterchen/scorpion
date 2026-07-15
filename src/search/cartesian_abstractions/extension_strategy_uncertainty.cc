@@ -53,12 +53,14 @@ CartesianSet ExtensionStrategyUncertaintyInstance::get_extension(
                         unsat_body_atoms[r.get_id()]--;
                         if (unsat_body_atoms[r.get_id()] == 0) {
                             int head_id = r.get_effects()[0].get_fact().get_var_id();
-                            result.remove(head_id, 0); // remove false value for derived variable as axiom fires and makes it true
+                            int default_val = variables[head_id].get_default_axiom_value();
+                            int derived_val = 1 - default_val;
+                            result.remove(head_id, default_val); // remove default value (usually false) for derived variable as axiom fires (and makes it true usually)
                             if (result.count(head_id) == 0) {
                                 std::cout << "var " << head_id <<  "conflict!!" << a << "Unreachable: derived variable domain emptied" << std::endl;
                                 return result; // conflict with extension, empty domain for derived variable
                             }
-                            enqueue(fact_queue, seen_vars, FactPair(head_id, 1), true);
+                            enqueue(fact_queue, seen_vars, FactPair(head_id, derived_val), true);
                         }
                         break; // assuming each fact only occurs once in an operator precondition
                     }
@@ -75,12 +77,14 @@ CartesianSet ExtensionStrategyUncertaintyInstance::get_extension(
                         supporting_axioms[head_id]--;
                         unsat_axioms.insert(r.get_id());
                         if (supporting_axioms[head_id] == 0) {
-                            result.remove(head_id, 1); // remove true value for derived variable as no axiom can fire
+                            int default_val = variables[head_id].get_default_axiom_value();
+                            int derived_val = 1 - default_val;
+                            result.remove(head_id, derived_val); // remove true value for derived variable as no axiom can fire
                             if (result.count(head_id) == 0) {
                                 std::cout << "var " << head_id <<  "conflict!!" << a << "Unreachable: derived variable domain emptied" << std::endl;
                                 return result; // conflict with extension, empty domain for derived variable
                             }
-                            enqueue(fact_queue, seen_vars, FactPair(head_id, 0), true);
+                            enqueue(fact_queue, seen_vars, FactPair(head_id, default_val), true);
                         }
                         break; // assuming each fact only occurs once in an operator precondition
                     }
@@ -126,7 +130,7 @@ int ExtensionStrategyUncertaintyInstance::get_extension_value(
                         if (unsat_body_atoms[r.get_id()] == 0) {
                             FactProxy head_atom = r.get_effects()[0].get_fact();
                             if (head_atom.get_var_id() == var) {
-                                return head_atom.get_value(); // derived variable is true
+                                return head_atom.get_value(); // derived variable is set to axiom head (usually true)
                             } 
                             enqueue(fact_queue, seen_vars, head_atom.get_pair(), true);
                         }
@@ -147,7 +151,7 @@ int ExtensionStrategyUncertaintyInstance::get_extension_value(
                         unsat_axioms.insert(r.get_id());
                         if (supporting_axioms[head_id] == 0) {
                             if (head_id == var) {
-                                return 0; // derived variable is false
+                                return variables[var].get_default_axiom_value(); // derived variable is its default value (usually false)
                             } 
                             enqueue(fact_queue, seen_vars, head_atom.get_pair(), false);
                         }
