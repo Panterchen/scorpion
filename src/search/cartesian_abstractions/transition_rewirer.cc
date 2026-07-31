@@ -72,7 +72,6 @@ void TransitionRewirer::rewire_incoming_transitions(
     deque<Transitions> &incoming, deque<Transitions> &outgoing,
     const AbstractStates &states, int v_id, const AbstractState &v1,
     const AbstractState &v2, int var) const {
-
     /* State v has been split into v1 and v2. Now for all transitions
        u->v we need to add transitions u->v1, u->v2, or both.
        We check for conflicts on derived variables in all cases, since even
@@ -80,6 +79,8 @@ void TransitionRewirer::rewire_incoming_transitions(
        value, and we may get different derived variable domains for v1 and v2
        after the split.
     */
+    bool debug_output = false; // TODO: pass as parameter
+
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
 
@@ -105,8 +106,8 @@ void TransitionRewirer::rewire_incoming_transitions(
 
         const AbstractState &u = *states[u_id];
 
-        bool u_v1_valid = cons.first && check_transition_validity(u, v1, op_id);
-        bool u_v2_valid = cons.second && check_transition_validity(u, v2, op_id);
+        // bool u_v1_valid = cons.first && explicit_transition_check(u, v1, op_id);
+        // bool u_v2_valid = cons.second && explicit_transition_check(u, v2, op_id);
         bool added_u_v1 = false;
         bool added_u_v2 = false;
 
@@ -151,22 +152,26 @@ void TransitionRewirer::rewire_incoming_transitions(
                 if (v1.contains(var, post)) {
                     // op can only end in v1.
                     if (!derived_conflict_v1) {
-                        add_transition(incoming, outgoing, u_id, op_id, v1_id);
+                        add_transition(incoming, outgoing, u_id,
+                            op_id, v1_id);
                         added_u_v1 = true;
                     }
                 } else {
                     // op can only end in v2.
                     assert(v2.contains(var, post));
                     if (!derived_conflict_v2) {
-                        add_transition(incoming, outgoing, u_id, op_id, v2_id);
+                        add_transition(incoming, outgoing, u_id,
+                            op_id, v2_id);
                         added_u_v2 = true;
                     }
                 }
             }
         }
-        bool mistake_v1 = ((added_u_v1 && !u_v1_valid) || (!added_u_v1 && u_v1_valid) );
-        bool mistake_v2 = ((added_u_v2 && !u_v2_valid) || (!added_u_v2 && u_v2_valid));
-        if (added_u_v2 && !u_v2_valid) {
+        if (debug_output) {
+            verify_rewiring_incoming(u, v1, v2, op_id, added_u_v1, added_u_v2,
+                cons);
+        }
+        /* if (added_u_v2 && !u_v2_valid) {
             std::cout << "Transition u (" << u_id << ") - op (" << op_id << ") -> v2 ("<< v2_id <<") invalid but added." << std::endl;
         }
         if (!added_u_v2 && u_v2_valid) {
@@ -177,20 +182,22 @@ void TransitionRewirer::rewire_incoming_transitions(
         }
         if (!added_u_v1 && u_v1_valid) {
             std::cout << "Transition u (" << u_id << ") - op (" << op_id << ") -> v1 ("<< v1_id <<") valid but not added." << std::endl;
-        }
-        if (mistake_v1 || mistake_v2) {
-            // print information about transition where stuff goes wrong...
-            std::cout << "Variable: " << var << ", derived ? " << derived << ", postcondition[var]: " << post << std::endl;
-            std::cout << "u cartesian set " << u.get_cartesian_set() << std::endl;
-            if (mistake_v1) {
-                std::cout << "v1 cartesian set " << v1.get_cartesian_set() << std::endl;
-                std::cout << "derived conflict? " << derived_conflict_v1 << std::endl;
-            }
-            if (mistake_v2) {
-                std::cout << "v2 cartesian set " << v2.get_cartesian_set() << std::endl;
-                std::cout << "derived conflict? " << derived_conflict_v2 << std::endl;
-            }
-        }
+        } */
+        // bool mistake_v1 = ((added_u_v1 && !u_v1_valid) || (!added_u_v1 && u_v1_valid) );
+        // bool mistake_v2 = ((added_u_v2 && !u_v2_valid) || (!added_u_v2 && u_v2_valid));
+        // if (mistake_v1 || mistake_v2) {
+        //     // print information about transition where stuff goes wrong...
+        //     std::cout << "Variable: " << var << ", derived ? " << derived << ", postcondition[var]: " << post << std::endl;
+        //     std::cout << "u cartesian set " << u.get_cartesian_set() << std::endl;
+        //     if (mistake_v1) {
+        //         std::cout << "v1 cartesian set " << v1.get_cartesian_set() << std::endl;
+        //         std::cout << "derived conflict? " << derived_conflict_v1 << std::endl;
+        //     }
+        //     if (mistake_v2) {
+        //         std::cout << "v2 cartesian set " << v2.get_cartesian_set() << std::endl;
+        //         std::cout << "derived conflict? " << derived_conflict_v2 << std::endl;
+        //     }
+        // }
     }
 }
 
@@ -198,7 +205,7 @@ void TransitionRewirer::rewire_outgoing_transitions(
     deque<Transitions> &incoming, deque<Transitions> &outgoing,
     const AbstractStates &states, int v_id, const AbstractState &v1,
     const AbstractState &v2, int var) const {
-
+    bool debug_output = false; // TODO: pass in as parameter
     /* State v has been split into v1 and v2. Now for all transitions
        v->w we need to add transitions v1->w, v2->w, or both. */
     int v1_id = v1.get_id();
@@ -228,8 +235,8 @@ void TransitionRewirer::rewire_outgoing_transitions(
 
         const AbstractState &w = *states[w_id];
 
-        bool v1_w_valid = check_transition_validity(v1, w, op_id);
-        bool v2_w_valid = check_transition_validity(v2, w, op_id);
+        //bool v1_w_valid = explicit_transition_check(v1, w, op_id);
+        //bool v2_w_valid = explicit_transition_check(v2, w, op_id);
 
         bool added_v1_w = false;
         bool added_v2_w = false;
@@ -334,7 +341,11 @@ void TransitionRewirer::rewire_outgoing_transitions(
                 added_v2_w = true;
             }
         }
-        if (added_v1_w && !v1_w_valid) {
+        if (debug_output) {
+            verify_rewiring_outgoing(w, v1, v2, op_id, added_v1_w, added_v2_w,
+                cons);
+        }
+      /*if (added_v1_w && !v1_w_valid) {
             std::cout << "Transition v1 (" << v1_id << ") - op (" << op_id << ") -> w ("<< w_id <<") invalid but added." << std::endl;
         }
         if (!added_v1_w && v1_w_valid) {
@@ -345,26 +356,8 @@ void TransitionRewirer::rewire_outgoing_transitions(
         }
         if (!added_v2_w && v2_w_valid) {
             std::cout << "Transition v2 (" << v2_id << ") - op (" << op_id << ") -> w ("<< w_id <<") valid but not added." << std::endl;
-            std::cout << "V2 consistent: " << cons.second << std::endl;
-            // std::cout << "precondition conflict v1 " << pre_derived_conflict_v1 << std::endl;
-            std::cout << "precondition conflict v2 " << pre_derived_conflict_v2 << std::endl;
-            // std::cout << "derived_conflict_v1 " << derived_conflict_v1 << std::endl;
-            std::cout << "derived_conflict_v2 " << derived_conflict_v2 << std::endl;
+        } */
 
-            cout << "Precondition value: " << pre << ", Postcondition value: " << post << endl;
-            cout << "var " << var << " is " << (derived ? "derived" : "basic") << endl;
-            // if (cons.first) {
-            //     cout << "abstract state v1: " << v1.get_cartesian_set() << endl;
-            // } else {
-            //     cout << "abstract state v1: " << "inconsistent" << endl;
-            // }
-            if (cons.second) {
-                cout << "abstract state v2: " << v2.get_cartesian_set() << endl;
-            } else {
-                cout << "abstract state v2: " << "inconsistent" << endl;
-            }
-            cout << "abstract state w: " << w.get_cartesian_set() << endl;
-        }
     }
 }
 
@@ -373,6 +366,7 @@ void TransitionRewirer::rewire_loops(
     deque<Transitions> &outgoing, int v_id, const AbstractState &v1,
     const AbstractState &v2, int var) const {
 
+    bool debug_output = false; // TODO : eventually pass in as parameter
     pair<bool, bool> cons = consistency_check(v1, v2);
 
     // std::cout << "V1 " << v1.get_id() << " consistency: " << cons.first << std::endl;
@@ -387,10 +381,10 @@ void TransitionRewirer::rewire_loops(
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
     for (int op_id : old_loops) {
-        bool loop_v1_valid = check_transition_validity(v1, v1, op_id);
-        bool loop_v2_valid = check_transition_validity(v2, v2, op_id);
-        bool v1_v2_valid = check_transition_validity(v1, v2, op_id);
-        bool v2_v1_valid = check_transition_validity(v2, v1, op_id);
+        //bool loop_v1_valid = explicit_transition_check(v1, v1, op_id);
+        //bool loop_v2_valid = explicit_transition_check(v2, v2, op_id);
+        //bool v1_v2_valid = explicit_transition_check(v1, v2, op_id);
+        //bool v2_v1_valid = explicit_transition_check(v2, v1, op_id);
 
         bool added_loop_v1 = false;
         bool added_loop_v2 = false;
@@ -584,7 +578,11 @@ void TransitionRewirer::rewire_loops(
                 }
             }
         }
-        if (loop_v1_valid && !added_loop_v1) {
+        if (debug_output) {
+            verify_rewiring_loops(v1, v2, op_id, added_loop_v1, added_loop_v2,
+                added_v1_v2, added_v2_v1, cons);
+        }
+      /*if (loop_v1_valid && !added_loop_v1) {
             std::cout << "Loop v1 (" << v1_id << ") valid but not added" << std::endl;
         }
         if (!loop_v1_valid && added_loop_v1) {
@@ -607,11 +605,7 @@ void TransitionRewirer::rewire_loops(
         }
         if (!v2_v1_valid && added_v2_v1) {
             std::cout << "Transition v2 (" << v2_id << ") - op (" << op_id << ") -> v1 ("<< v1_id <<") invalid but added." << std::endl;
-        }
-        // if (added_loop_v1) std::cout << "Added loop v1 (" << v1_id << ")" << std::endl;
-        // if (added_loop_v2) std::cout << "Added loop v2 (" << v2_id << ")" << std::endl;
-        // if (added_v1_v2) std::cout << "Added v1 (" << v1_id << ") - op (" << op_id << ") -> v2 ("<< v2_id <<")" << std::endl;
-        // if (added_v2_v1) std::cout << "Added v2 (" << v2_id << ")  - op (" << op_id << ") -> v1 ("<< v1_id <<")" << std::endl;
+        } */
     }
 }
 
@@ -693,6 +687,14 @@ bool TransitionRewirer::precondition_derived_conflict(
 }
 
 std::pair<bool, bool> TransitionRewirer::consistency_check(const AbstractState &v1, const AbstractState &v2) const {
+    /*  This function checks two abstract states v1 and v2 for consistency
+     *  w.r.t. the set of axioms in the given task. If the extension of the
+     *  respective Cartesian set contains an empty variable domain for one of
+     *  the derived variables, then the abstract state is inconsistent.
+     *  The function returns a pair of bools <consistency_v1, consistency_v2>
+     *  where consistency_vx is true if the state vx is consistent, and false
+     *  else.
+     */
     bool v1_consistent = true;
     bool v2_consistent = true;
     std::vector< int > derived_vars;
@@ -744,44 +746,8 @@ std::pair<bool, bool> TransitionRewirer::consistency_check(const AbstractState &
     return std::pair<bool, bool>(v1_consistent, v2_consistent);
 }
 
-bool TransitionRewirer::check_transition_validity(const AbstractState &source, const AbstractState &target,
-    const int op) const {
-    for (const VariableProxy &var : vars) {
-        int var_id = var.get_id();
-        int pre_val = get_precondition_value(op, var_id);
-        int post_val = get_postcondition_value(op, var_id);
-        if (!var.is_derived()) {
-            if (pre_val != UNDEFINED && !source.contains(var_id, pre_val)) {
-                // std::cout << source.get_id() << " to " << target.get_id() << " invalid reason 1 on" << var.get_id() << std::endl;
-                return false;
-            }
-            if (pre_val != post_val && !target.contains(var_id, post_val)) {
-                // std::cout << source.get_id() << " to " << target.get_id() << " invalid reason 2 on" << var.get_id() << std::endl;
-                return false;
-            }
-            if (post_val == UNDEFINED && !source.get_cartesian_set().intersects(target.get_cartesian_set(), var_id)) {
-                // std::cout << source.get_id() << " to " << target.get_id() << " invalid reason 3 on" << var.get_id() << std::endl;
-                return false;
-            }
-        }
-    }
-    if (precondition_derived_conflict(source.get_cartesian_set(), op)) {
-        // std::cout << "Precondition conflict! for "<< source.get_id() << " to " << target.get_id() << std::endl;
-        return false;
-    }
-    if (conflict_derived_domains(source.get_cartesian_set(), op, target.get_cartesian_set())) {
-        // std::cout << "Conflict derived domains! for "<< source.get_id() << " to " << target.get_id() << std::endl;
-        return false;
-    }
-    return true;
-}
-
 bool TransitionRewirer::check_regression_intersection(const AbstractState &source, const AbstractState &target, int op) const {
-    /*
-     *  implement the naive transition check that explicitly checks every var
-     *  from the paper (inefficient but used to confirm accuracy for optimized
-     *  version)
-     */
+    // TODO: can be removed?
     regression_strategy_instance->prepare(target.get_cartesian_set(), op);
     // CartesianSet ext_source = extension_strategy_instance->get_extension(source.get_cartesian_set());
     CartesianSet regr_t_o = regression_strategy_instance->get_regression(target.get_cartesian_set(), op);
@@ -802,13 +768,111 @@ bool TransitionRewirer::check_regression_intersection(const AbstractState &sourc
             } else {
                 std::cout << "  Added transition from " << source.get_id() << " to " << target.get_id() << " via op " << op << " on basic var " << var_id << " with empty intersection on regression" << std::endl;
             }
+            valid = false;
             // std::cout << "  Empty intersection on var " << var_id << std::endl;
             // std::cout << "      src[var]" << a.get_values(var_id) << std::endl;
             // std::cout << "      regr(target, o)[var]" << regr_t_o.get_values(var_id) << std::endl;
         }
     }
     return valid;
+}
 
+
+bool TransitionRewirer::explicit_transition_check(const AbstractState &source, const AbstractState &target,
+    const int op) const {
+    /*
+     *  implement the naive transition check that explicitly checks every var
+     *  from the paper (inefficient but used to confirm accuracy for optimized
+     *  version)
+     */
+    for (const VariableProxy &var : vars) {
+        int var_id = var.get_id();
+        int pre_val = get_precondition_value(op, var_id);
+        int post_val = get_postcondition_value(op, var_id);
+        if (!var.is_derived()) {
+            if (pre_val != UNDEFINED && !source.contains(var_id, pre_val)) {
+                return false;
+            }
+            if (post_val != UNDEFINED && !target.contains(var_id, post_val)) {
+                return false;
+            }
+            if (post_val == UNDEFINED && !source.get_cartesian_set().intersects(target.get_cartesian_set(), var_id)) {
+                return false;
+            }
+        }
+    }
+    if (precondition_derived_conflict(source.get_cartesian_set(), op)) {
+        // std::cout << "Precondition conflict! for "<< source.get_id() << " to " << target.get_id() << std::endl;
+        return false;
+    }
+    if (conflict_derived_domains(source.get_cartesian_set(), op, target.get_cartesian_set())) {
+        // std::cout << "Conflict derived domains! for "<< source.get_id() << " to " << target.get_id() << std::endl;
+        return false;
+    }
+    return true;
+}
+
+void TransitionRewirer::verify_rewiring_incoming(const AbstractState &u,
+    const AbstractState &v1, const AbstractState &v2, int op_id,
+    bool added_u_v1, bool added_u_v2, pair<bool, bool> cons) const {
+    bool valid_u_v1 = explicit_transition_check(u, v1, op_id);
+    bool valid_u_v2 = explicit_transition_check(u, v2, op_id);
+    if (valid_u_v1 != added_u_v1) {
+        std::cout << "u (" << u.get_id() << ") -- " << op_id << "--> v1 ("
+        << v1.get_id() << ", consistent: " << cons.first << "), added : "
+        << added_u_v1 << "; valid : " << valid_u_v1 << std::endl;
+    }
+    if (valid_u_v2 != added_u_v2) {
+        std::cout << "u (" << u.get_id() << ") -- " << op_id << "--> v2 ("
+        << v2.get_id() << ", consistent: " << cons.second << "), added : "
+        << added_u_v2 << "; valid : " << valid_u_v2 << std::endl;
+    }
+}
+void TransitionRewirer::verify_rewiring_outgoing(const AbstractState &w,
+    const AbstractState &v1, const AbstractState &v2, int op_id,
+    bool added_v1_w, bool added_v2_w, pair<bool, bool> cons) const {
+    bool valid_v1_w = explicit_transition_check(v1, w, op_id);
+    bool valid_v2_w = explicit_transition_check(v2, w, op_id);
+    if (valid_v1_w != added_v1_w) {
+        std::cout << "v1 (" << v1.get_id() << ", consistent: " << cons.first
+        << ") -- " << op_id << "-->  w ("  << w.get_id()  << "), added : "
+        << added_v1_w << "; valid : " << valid_v1_w << std::endl;
+    }
+    if (valid_v2_w != added_v2_w) {
+        std::cout << "v2 (" << v2.get_id() << ", consistent: " << cons.second
+        << ") -- " << op_id << "-->  w ("  << w.get_id()  << "), added : "
+        << added_v2_w << "; valid : " << valid_v2_w << std::endl;
+    }
+}
+void TransitionRewirer::verify_rewiring_loops(const AbstractState &v1, const AbstractState &v2,
+    int op_id, bool added_loop_v1, bool added_loop_v2, bool added_v1_v2,
+    bool added_v2_v1, pair<bool, bool> cons) const {
+    bool valid_v1 = explicit_transition_check(v1, v1, op_id);
+    bool valid_v2 = explicit_transition_check(v2, v2, op_id);
+    bool valid_v1_v2 = explicit_transition_check(v1, v2, op_id);
+    bool valid_v2_v1 = explicit_transition_check(v2, v2, op_id);
+    if (valid_v1 != added_loop_v1) {
+        std::cout << "v1 (" << v1.get_id() << ", consistent: " << cons.first
+        << ") loop " << op_id << ", added : "
+        << added_loop_v1 << "; valid : " << valid_v1 << std::endl;
+    }
+    if (valid_v2 != added_loop_v2) {
+        std::cout << "v2 (" << v2.get_id() << ", consistent: " << cons.second
+        << ") loop " << op_id << ", added : "
+        << added_loop_v2 << "; valid : " << valid_v2 << std::endl;
+    }
+    if (valid_v1_v2 != added_v1_v2) {
+        std::cout << "v1 (" << v1.get_id() << ", consistent: " << cons.first
+        << ") -- " << op_id << "-->  v2 ("  << v2.get_id()
+        << ", consistent: " << cons.second << "), added : "
+        << added_v1_v2 << "; valid : " << valid_v1_v2 << std::endl;
+    }
+    if (valid_v2_v1 != added_v2_v1) {
+        std::cout << "v2 (" << v2.get_id() << ", consistent: " << cons.second
+        << ") -- " << op_id << "-->  v1 ("  << v1.get_id()
+        << ", consistent: " << cons.first << "), added : "
+        << added_v2_v1 << "; valid : " << valid_v2_v1 << std::endl;
+    }
 }
 
 }

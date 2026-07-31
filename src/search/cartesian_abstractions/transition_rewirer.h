@@ -44,6 +44,22 @@ class TransitionRewirer {
     bool conflict_derived_domains(const CartesianSet &a, int op_id, const CartesianSet &b) const;
     bool precondition_derived_conflict(const CartesianSet &a, int op_id) const;
 
+    bool check_regression_intersection(
+        const AbstractState &source, const AbstractState &target, int op) const;
+
+
+    bool explicit_transition_check(
+    const AbstractState &source, const AbstractState &target, int op) const;
+    void verify_rewiring_incoming(const AbstractState &u,
+        const AbstractState &v1, const AbstractState &v2, int op_id,
+        bool added_u_v1, bool added_u_v2, std::pair<bool, bool> cons) const;
+    void verify_rewiring_outgoing(const AbstractState &w,
+        const AbstractState &v1, const AbstractState &v2, int op_id,
+        bool added_v1_w, bool added_v2_w, std::pair<bool, bool> cons) const;
+    void verify_rewiring_loops(const AbstractState &v1, const AbstractState &v2,
+        int op_id, bool added_loop_v1, bool added_loop_v2, bool added_v1_v2,
+        bool added_v2_v1, std::pair<bool, bool> cons) const;
+
 public:
     explicit TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<RegressionStrategy> &regression_strategy);
@@ -75,13 +91,8 @@ public:
     }
 
     int get_num_operators() const;
-
     std::pair<bool, bool> consistency_check(
-        const AbstractState &v1, const AbstractState &v2) const;
-    bool check_transition_validity(
-        const AbstractState &source, const AbstractState &target, int op) const;
-    bool check_regression_intersection(
-        const AbstractState &source, const AbstractState &target, int op) const;
+    const AbstractState &v1, const AbstractState &v2) const;
 };
 }
 
