@@ -29,6 +29,8 @@ class TransitionRewirer {
     const std::vector<std::vector<FactPair>> preconditions_by_operator;
     const std::vector<std::vector<FactPair>> postconditions_by_operator;
 
+    const bool verify_transitions_debug;
+
     int get_precondition_value(int op_id, int var) const;
     int get_postcondition_value(int op_id, int var) const;
 
@@ -62,7 +64,8 @@ class TransitionRewirer {
 
 public:
     explicit TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategy> &extension_strategy,
-        const std::shared_ptr<RegressionStrategy> &regression_strategy);
+        const std::shared_ptr<RegressionStrategy> &regression_strategy,
+        bool verify_transitions_debug);
 
     void rewire_transitions(
         std::deque<Transitions> &incoming, std::deque<Transitions> &outgoing,

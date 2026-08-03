@@ -31,6 +31,7 @@ class CartesianAbstractionGenerator : public AbstractionGenerator {
     const int max_states;
     const int max_transitions;
     const double max_time;
+    const bool verify_transitions_debug;
     const cartesian_abstractions::TransitionRepresentation
         transition_representation;
     const cartesian_abstractions::PickFlawedAbstractState
@@ -60,6 +61,7 @@ public:
         const std::shared_ptr<cartesian_abstractions::ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<cartesian_abstractions::RegressionStrategy> &regression_strategy,
         int max_states, int max_transitions, double max_time,
+        bool verify_transitions_debug,
         cartesian_abstractions::PickFlawedAbstractState
             pick_flawed_abstract_state,
         cartesian_abstractions::PickSplit pick_split,

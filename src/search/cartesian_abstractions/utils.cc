@@ -277,6 +277,12 @@ void add_common_cegar_options(plugins::Feature &feature) {
         "sort transitions to ensure the different transition system representations "
         "yield the same abstractions",
         "false");
+    feature.add_option<bool>(
+        "verify_transitions_debug",
+        "verify updated transitions against explicitly calculated transitions "
+        "via the inefficient pseudocode algorithm from the original CEGAR paper. Only use for "
+        "debugging.",
+        "false");
 
     add_transition_representation_option(feature);
     add_pick_flawed_abstract_state_strategies(feature);

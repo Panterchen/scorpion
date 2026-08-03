@@ -23,6 +23,7 @@ AdditiveCartesianHeuristic::AdditiveCartesianHeuristic(
     const std::shared_ptr<RegressionStrategy> &regression_strategy,
     int max_states,
     int max_transitions, double max_time,
+    bool verify_transitions_debug,
     PickFlawedAbstractState pick_flawed_abstract_state, PickSplit pick_split,
     PickSplit tiebreak_split, int max_concrete_states_per_abstract_state,
     int max_state_expansions,
@@ -34,6 +35,7 @@ AdditiveCartesianHeuristic::AdditiveCartesianHeuristic(
     CostSaturation cost_saturation(
         subtasks, extension_strategy, regression_strategy,
         max_states, max_transitions, max_time, use_general_costs,
+        verify_transitions_debug,
         pick_flawed_abstract_state, pick_split, tiebreak_split,
         max_concrete_states_per_abstract_state, max_state_expansions,
         transition_representation, memory_padding, *utils::get_rng(random_seed),
@@ -130,6 +132,7 @@ public:
             opts.get<shared_ptr<RegressionStrategy>>("regression_strategy"),
             opts.get<int>("max_states"), opts.get<int>("max_transitions"),
             opts.get<double>("max_time"),
+            opts.get<bool>("verify_transitions_debug"),
             opts.get<PickFlawedAbstractState>("pick_flawed_abstract_state"),
             opts.get<PickSplit>("pick_split"),
             opts.get<PickSplit>("tiebreak_split"),

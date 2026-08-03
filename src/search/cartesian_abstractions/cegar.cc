@@ -24,7 +24,8 @@ CEGAR::CEGAR(
     const shared_ptr<ExtensionStrategy> &extension_strategy,
     const shared_ptr<RegressionStrategy> &regression_strategy,
     int max_states, int max_transitions,    
-    double max_time, PickFlawedAbstractState pick_flawed_abstract_state,
+    double max_time, bool verify_transitions_debug,
+    PickFlawedAbstractState pick_flawed_abstract_state,
     PickSplit pick_split, PickSplit tiebreak_split,
     int max_concrete_states_per_abstract_state, int max_state_expansions,
     TransitionRepresentation transition_representation,
@@ -41,7 +42,8 @@ CEGAR::CEGAR(
               : INF),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
       transition_rewirer(
-          make_shared<TransitionRewirer>(task_proxy, extension_strategy, regression_strategy)),
+          make_shared<TransitionRewirer>(task_proxy, extension_strategy, regression_strategy,
+              verify_transitions_debug)),
       abstraction(make_unique<Abstraction>(
           task, transition_rewirer, transition_representation, log)),
       timer(max_time),

@@ -46,11 +46,13 @@ static void add_loop(deque<Loops> &loops, int state_id, int op_id) {
 
 TransitionRewirer::TransitionRewirer(const TaskProxy &task,
     const std::shared_ptr<ExtensionStrategy> &extension_strategy,
-    const std::shared_ptr<RegressionStrategy> &regression_strategy)
+    const std::shared_ptr<RegressionStrategy> &regression_strategy,
+    bool verify_transitions_debug)
     : vars(task.get_variables()), extension_strategy_instance(extension_strategy->create(task)),
     regression_strategy_instance(regression_strategy->create(task, extension_strategy)),
     preconditions_by_operator(compute_preconditions_by_operator(task.get_operators())),
-    postconditions_by_operator(compute_postconditions_by_operator(task.get_operators())){
+    postconditions_by_operator(compute_postconditions_by_operator(task.get_operators())),
+    verify_transitions_debug(verify_transitions_debug) {
 }
 
 void TransitionRewirer::rewire_transitions(
@@ -79,7 +81,6 @@ void TransitionRewirer::rewire_incoming_transitions(
        value, and we may get different derived variable domains for v1 and v2
        after the split.
     */
-    bool debug_output = false; // TODO: pass as parameter
 
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
@@ -167,7 +168,7 @@ void TransitionRewirer::rewire_incoming_transitions(
                 }
             }
         }
-        if (debug_output) {
+        if (verify_transitions_debug) {
             verify_rewiring_incoming(u, v1, v2, op_id, added_u_v1, added_u_v2,
                 cons);
         }
@@ -205,7 +206,6 @@ void TransitionRewirer::rewire_outgoing_transitions(
     deque<Transitions> &incoming, deque<Transitions> &outgoing,
     const AbstractStates &states, int v_id, const AbstractState &v1,
     const AbstractState &v2, int var) const {
-    bool debug_output = false; // TODO: pass in as parameter
     /* State v has been split into v1 and v2. Now for all transitions
        v->w we need to add transitions v1->w, v2->w, or both. */
     int v1_id = v1.get_id();
@@ -341,7 +341,7 @@ void TransitionRewirer::rewire_outgoing_transitions(
                 added_v2_w = true;
             }
         }
-        if (debug_output) {
+        if (verify_transitions_debug) {
             verify_rewiring_outgoing(w, v1, v2, op_id, added_v1_w, added_v2_w,
                 cons);
         }
@@ -366,7 +366,6 @@ void TransitionRewirer::rewire_loops(
     deque<Transitions> &outgoing, int v_id, const AbstractState &v1,
     const AbstractState &v2, int var) const {
 
-    bool debug_output = false; // TODO : eventually pass in as parameter
     pair<bool, bool> cons = consistency_check(v1, v2);
 
     // std::cout << "V1 " << v1.get_id() << " consistency: " << cons.first << std::endl;
@@ -578,7 +577,7 @@ void TransitionRewirer::rewire_loops(
                 }
             }
         }
-        if (debug_output) {
+        if (verify_transitions_debug) {
             verify_rewiring_loops(v1, v2, op_id, added_loop_v1, added_loop_v2,
                 added_v1_v2, added_v2_v1, cons);
         }
@@ -850,7 +849,7 @@ void TransitionRewirer::verify_rewiring_loops(const AbstractState &v1, const Abs
     bool valid_v1 = explicit_transition_check(v1, v1, op_id);
     bool valid_v2 = explicit_transition_check(v2, v2, op_id);
     bool valid_v1_v2 = explicit_transition_check(v1, v2, op_id);
-    bool valid_v2_v1 = explicit_transition_check(v2, v2, op_id);
+    bool valid_v2_v1 = explicit_transition_check(v2, v1, op_id);
     if (valid_v1 != added_loop_v1) {
         std::cout << "v1 (" << v1.get_id() << ", consistent: " << cons.first
         << ") loop " << op_id << ", added : "

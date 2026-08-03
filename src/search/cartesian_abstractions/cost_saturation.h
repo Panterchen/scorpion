@@ -39,6 +39,7 @@ class CostSaturation {
     const int max_transitions;
     const double max_time;
     const bool use_general_costs;
+    const bool verify_transitions_debug;
     const PickFlawedAbstractState pick_flawed_abstract_state;
     const PickSplit pick_split;
     const PickSplit tiebreak_split;
@@ -73,7 +74,7 @@ public:
         const std::shared_ptr<ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<RegressionStrategy> &regression_strategy,
         int max_states, int max_transitions, double max_time,
-        bool use_general_costs,
+        bool use_general_costs, bool verify_transitions_debug,
         PickFlawedAbstractState pick_flawed_abstract_state,
         PickSplit pick_split, PickSplit tiebreak_split,
         int max_concrete_states_per_abstract_state, int max_state_expansions,

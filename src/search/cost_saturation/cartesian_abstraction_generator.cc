@@ -55,6 +55,7 @@ CartesianAbstractionGenerator::CartesianAbstractionGenerator(
     const shared_ptr<cartesian_abstractions::ExtensionStrategy> &extension_strategy,
     const shared_ptr<cartesian_abstractions::RegressionStrategy> &regression_strategy,
     int max_states, int max_transitions, double max_time,
+    bool verify_transitions_debug,
     cartesian_abstractions::PickFlawedAbstractState pick_flawed_abstract_state,
     cartesian_abstractions::PickSplit pick_split,
     cartesian_abstractions::PickSplit tiebreak_split,
@@ -70,6 +71,7 @@ CartesianAbstractionGenerator::CartesianAbstractionGenerator(
       max_states(max_states),
       max_transitions(max_transitions),
       max_time(max_time),
+      verify_transitions_debug(verify_transitions_debug),
       transition_representation(transition_representation),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
       pick_split(pick_split),
@@ -106,6 +108,7 @@ void CartesianAbstractionGenerator::build_abstractions_for_subtasks(
             cartesian_abstractions::get_subtask_limit(
                 max_transitions, num_transitions, remaining_subtasks),
             timer.get_remaining_time() / remaining_subtasks,
+            verify_transitions_debug,
             pick_flawed_abstract_state, pick_split, tiebreak_split,
             max_concrete_states_per_abstract_state, max_state_expansions,
             transition_representation, *rng, log, dot_graph_verbosity);
@@ -211,6 +214,7 @@ public:
             opts.get<shared_ptr<cartesian_abstractions::RegressionStrategy>>("regression_strategy"),
             opts.get<int>("max_states"), opts.get<int>("max_transitions"),
             opts.get<double>("max_time"),
+            opts.get<bool>("verify_transitions_debug"),
             opts.get<cartesian_abstractions::PickFlawedAbstractState>(
                 "pick_flawed_abstract_state"),
             opts.get<cartesian_abstractions::PickSplit>("pick_split"),

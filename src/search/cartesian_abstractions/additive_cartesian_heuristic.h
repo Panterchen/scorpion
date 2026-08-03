@@ -33,6 +33,7 @@ public:
         const std::shared_ptr<ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<RegressionStrategy> &regression_strategy,
         int max_states, int max_transitions, double max_time,
+        bool verify_transitions_debug,
         PickFlawedAbstractState pick_flawed_abstract_state,
         PickSplit pick_split, PickSplit tiebreak_split,
         int max_concrete_states_per_abstract_state, int max_state_expansions,

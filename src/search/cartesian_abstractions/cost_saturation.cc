@@ -79,7 +79,8 @@ CostSaturation::CostSaturation(
     const shared_ptr<ExtensionStrategy> &extension_strategy,
     const shared_ptr<RegressionStrategy> &regression_strategy,
     int max_states, int max_transitions, double max_time,
-    bool use_general_costs, PickFlawedAbstractState pick_flawed_abstract_state,
+    bool use_general_costs, bool verify_transitions_debug,
+    PickFlawedAbstractState pick_flawed_abstract_state,
     PickSplit pick_split, PickSplit tiebreak_split,
     int max_concrete_states_per_abstract_state, int max_state_expansions,
     TransitionRepresentation transition_representation, int memory_padding_mb,
@@ -92,6 +93,7 @@ CostSaturation::CostSaturation(
       max_transitions(max_transitions),
       max_time(max_time),
       use_general_costs(use_general_costs),
+      verify_transitions_debug(verify_transitions_debug),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
       pick_split(pick_split),
       tiebreak_split(tiebreak_split),
@@ -237,7 +239,8 @@ void CostSaturation::build_abstractions(
             extension_strategy, regression_strategy,
             get_subtask_limit(max_states, num_states, rem_subtasks),
             get_subtask_limit(max_transitions, num_transitions, rem_subtasks),
-            time_limit, pick_flawed_abstract_state, pick_split, tiebreak_split,
+            time_limit, verify_transitions_debug,
+            pick_flawed_abstract_state, pick_split, tiebreak_split,
             max_concrete_states_per_abstract_state, max_state_expansions,
             transition_representation, rng, log, dot_graph_verbosity);
         // Reset new-handler if we ran out of memory.
