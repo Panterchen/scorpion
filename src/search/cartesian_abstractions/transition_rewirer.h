@@ -30,6 +30,7 @@ class TransitionRewirer {
     const std::vector<std::vector<FactPair>> postconditions_by_operator;
 
     const bool verify_transitions_debug;
+    const bool task_has_axioms;
 
     int get_precondition_value(int op_id, int var) const;
     int get_postcondition_value(int op_id, int var) const;

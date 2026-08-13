@@ -28,7 +28,7 @@ CartesianSet ExtensionStrategyUncertaintyInstance::get_extension(
     // Axioms that we know can not fire because they have at least one unsatisfied body atom
     std::unordered_set<int> unsat_axioms;
 
-    for (OperatorProxy axiom : axioms){
+    for (OperatorProxy axiom : axioms) {
         unsat_body_atoms[axiom.get_id()] = axiom.get_effects()[0].get_conditions().size();
         supporting_axioms[axiom.get_effects()[0].get_fact().get_var_id()]++;
     }
@@ -67,12 +67,12 @@ CartesianSet ExtensionStrategyUncertaintyInstance::get_extension(
                 }
             }
         } else {
-            for (OperatorProxy r : axioms){
-                if (unsat_axioms.contains(r.get_id())){
+            for (OperatorProxy r : axioms) {
+                if (unsat_axioms.contains(r.get_id())) {
                     continue;
                 }
-                for (FactProxy f : r.get_effects()[0].get_conditions()){
-                    if (f.get_pair() == fact){
+                for (FactProxy f : r.get_effects()[0].get_conditions()) {
+                    if (f.get_pair() == fact) {
                         int head_id = r.get_effects()[0].get_fact().get_var_id();
                         supporting_axioms[head_id]--;
                         unsat_axioms.insert(r.get_id());
@@ -192,7 +192,6 @@ std::deque<std::pair<FactPair, bool>> ExtensionStrategyUncertaintyInstance::setu
                 // all values for var not in the domain must be false
                 fact_queue.emplace_front(FactPair(var_id, val), false);
             }
-
         }
     }
     return fact_queue;
@@ -245,7 +244,7 @@ public:
 
         add_extension_strategy_options_to_feature(*this);
 
-        document_note("Note", "TODO");
+        document_note("Note", "TODO"); //TODO
     }
     virtual shared_ptr<ExtensionStrategyUncertainty> create_component(
         const plugins::Options &opts) const override {

@@ -119,7 +119,10 @@ vector<CartesianHeuristicFunction> CostSaturation::generate_heuristic_functions(
 
     TaskProxy task_proxy(*task);
 
-    //task_properties::verify_no_axioms(task_proxy);
+    if (transition_representation == TransitionRepresentation::COMPUTE) {
+        // Axioms currently not supported for Match Tree
+        task_properties::verify_no_axioms(task_proxy);
+    }
     task_properties::verify_no_conditional_effects(task_proxy);
 
     reset(task_proxy);
