@@ -421,6 +421,16 @@ unique_ptr<Split> FlawSearch::create_split(
     return make_unique<Split>(move(split));
 }
 
+FlawedState FlawSearch::get_next_usable_flawed_state(
+    std::unordered_set<int> unsplittable_abstract_states) {
+    FlawedState flawed_state = get_flawed_state_with_min_h();
+    while (flawed_state != FlawedState::no_state  &&
+        unsplittable_abstract_states.count(flawed_state.abs_id)) {
+        flawed_state = get_flawed_state_with_min_h();
+    }
+    return flawed_state;
+}
+
 SearchStatus FlawSearch::search_for_flaws(
     const utils::CountdownTimer &cegar_timer) {
     flaw_search_timer.resume();
@@ -547,6 +557,138 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
         }
     }
 
+    /*
+    // TODO: remove this part if the alternate solution below performs stable
+    if (task_properties::has_axioms(task_proxy)) {
+        // Tracks abstract states for which create_split returned nullptr in
+        // this round (i.e. no valid split could be found despite a flaw existing).
+        // This happens with axioms when all split candidates are derived variables
+        // whose wanted vectors are degenerate, i.e. the wanted vector equals the
+        // current variable domain of the abstract state (naive regression).
+        // For tasks without derived variables, this set always stays empty.
+        // The set is reset after each call to search_for_flaws since the
+        // flawed_states collection is freshly populated at that point.
+        std::unordered_set<int> unsplittable_abstract_states;
+
+        while (true) {
+            // Try to get the next flawed abstract state with minimum h-value
+            // from the current collection without running a new flaw search.
+            FlawedState flawed_state = get_flawed_state_with_min_h();
+
+            if (flawed_state == FlawedState::no_state) {
+                // If we exhausted flawed_states and already encountered
+                // unsplittable states this round, running search_for_flaws again
+                // would find the same flaws since nothing has been refined —
+                // this would cause an infinite loop. Return nullptr and let
+                // the caller trigger a new refinement cycle.
+                if (!unsplittable_abstract_states.empty()) {
+                    last_refined_flawed_state = FlawedState::no_state;
+                    return nullptr;
+                }
+
+                // flawed_states is empty and no unsplittable states were seen
+                // this round — run a fresh flaw search to find new flaws.
+                if (log.is_at_least_debug()) {
+                    log << "No flawed state with min h found, search for flaws again." << endl;
+                }
+                SearchStatus search_status = search_for_flaws(cegar_timer);
+
+                if (search_status == SearchStatus::TIMEOUT)
+                    return nullptr;
+
+                if (search_status == SearchStatus::SOLVED)
+                    return nullptr;
+
+                // Flaw search found flaws (FAILED status). Clear the unsplittable
+                // set since we are starting a new round with a freshly populated
+                // flawed_states — previously unsplittable states may now be
+                // splittable after refinements elsewhere.
+                unsplittable_abstract_states.clear();
+
+                // Try to get a flawed state from the freshly populated set.
+                // Can still return no_state if all found states have stale
+                // h-values (get_flawed_state_with_min_h discards states whose
+                // h-value has increased). Return nullptr and let the caller
+                // handle the next cycle.
+                flawed_state = get_flawed_state_with_min_h();
+                if (flawed_state == FlawedState::no_state)
+                    return nullptr;
+            }
+
+            // Skip abstract states that already failed to produce a split in
+            // this round — they will not improve without a refinement step.
+            // Re-pop from flawed_states by continuing the loop.
+            if (unsplittable_abstract_states.count(flawed_state.abs_id)) {
+                continue;
+            }
+
+            if (log.is_at_least_debug()) {
+                log << "Use flawed state: " << flawed_state << endl;
+            }
+
+            unique_ptr<Split> split =
+                create_split(flawed_state.concrete_states, flawed_state.abs_id);
+
+            if (!utils::extra_memory_padding_is_reserved()) {
+                return nullptr;
+            }
+
+            if (split) {
+                // Valid split found — store the refined state for recycling
+                // on the next call and return the split to the caller.
+                last_refined_flawed_state = move(flawed_state);
+                return split;
+            } else {
+                // create_split returned nullptr — no valid split could be found
+                // for this abstract state despite a flaw existing. Mark it as
+                // unsplittable for this round and try the next flawed state.
+                unsplittable_abstract_states.insert(flawed_state.abs_id);
+                last_refined_flawed_state = FlawedState::no_state;
+            }
+        }
+    } else {
+        FlawedState flawed_state = get_flawed_state_with_min_h();
+        SearchStatus search_status = SearchStatus::FAILED;
+        if (flawed_state == FlawedState::no_state) {
+            search_status = search_for_flaws(cegar_timer);
+            if (search_status == SearchStatus::FAILED) {
+                flawed_state = get_flawed_state_with_min_h();
+            }
+        }
+
+        if (search_status == SearchStatus::TIMEOUT)
+            return nullptr;
+
+        if (search_status == SearchStatus::FAILED) {
+            // There are flaws to refine.
+            assert(flawed_state != FlawedState::no_state);
+
+            if (log.is_at_least_debug()) {
+                log << "Use flawed state: " << flawed_state << endl;
+            }
+
+            unique_ptr<Split> split;
+            split = create_split(flawed_state.concrete_states, flawed_state.abs_id);
+
+            if (!utils::extra_memory_padding_is_reserved()) {
+                return nullptr;
+            }
+
+            if (split) {
+                last_refined_flawed_state = move(flawed_state);
+            } else {
+                last_refined_flawed_state = FlawedState::no_state;
+                // We selected an abstract state without any flaws, so we try again.
+                return get_min_h_batch_split(cegar_timer);
+            }
+
+            return split;
+        }
+
+        assert(search_status == SearchStatus::SOLVED);
+        return nullptr;
+    } */
+    // TODO: test this implementation
     // Tracks abstract states for which create_split returned nullptr in
     // this round (i.e. no valid split could be found despite a flaw existing).
     // This happens with axioms when all split candidates are derived variables
@@ -555,28 +697,15 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
     // For tasks without derived variables, this set always stays empty.
     // The set is reset after each call to search_for_flaws since the
     // flawed_states collection is freshly populated at that point.
-    std::unordered_set<int> unsplittable_abstract_states;
-
+    std::unordered_set<int> unsplittable_abs_states;
     while (true) {
-        // Try to get the next flawed abstract state with minimum h-value
-        // from the current collection without running a new flaw search.
-        FlawedState flawed_state = get_flawed_state_with_min_h();
-
+        FlawedState flawed_state = get_next_usable_flawed_state(unsplittable_abs_states);
         if (flawed_state == FlawedState::no_state) {
-            // If we exhausted flawed_states and already encountered
-            // unsplittable states this round, running search_for_flaws again
-            // would find the same flaws since nothing has been refined —
-            // this would cause an infinite loop. Return nullptr and let
-            // the caller trigger a new refinement cycle.
-            if (!unsplittable_abstract_states.empty()) {
-                last_refined_flawed_state = FlawedState::no_state;
-                return nullptr;
-            }
-
-            // flawed_states is empty and no unsplittable states were seen
-            // this round — run a fresh flaw search to find new flaws.
+            // Known pool (aside from already-unsplittable states) is
+            // exhausted. Run a fresh flaw search — it may explore further
+            // into the concrete state space and uncover new flaws.
             if (log.is_at_least_debug()) {
-                log << "No flawed state with min h found, search for flaws again." << endl;
+                log << "No usable flawed state found, search for flaws again." << endl;
             }
             SearchStatus search_status = search_for_flaws(cegar_timer);
 
@@ -586,29 +715,18 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             if (search_status == SearchStatus::SOLVED)
                 return nullptr;
 
-            // Flaw search found flaws (FAILED status). Clear the unsplittable
-            // set since we are starting a new round with a freshly populated
-            // flawed_states — previously unsplittable states may now be
-            // splittable after refinements elsewhere.
-            unsplittable_abstract_states.clear();
+            // FAILED: search added new flaws. But those new flaws might
+            // themselves all belong to abstract states we already know are
+            // unsplittable — check explicitly instead of assuming progress.
+            flawed_state = get_next_usable_flawed_state(unsplittable_abs_states);
 
-            // Try to get a flawed state from the freshly populated set.
-            // Can still return no_state if all found states have stale
-            // h-values (get_flawed_state_with_min_h discards states whose
-            // h-value has increased). Return nullptr and let the caller
-            // handle the next cycle.
-            flawed_state = get_flawed_state_with_min_h();
-            if (flawed_state == FlawedState::no_state)
+            if (flawed_state == FlawedState::no_state) {
+                // A fresh search found nothing beyond already-known-unsplittable
+                // states — no further progress possible this round, stop.
+                last_refined_flawed_state = FlawedState::no_state;
                 return nullptr;
+            }
         }
-
-        // Skip abstract states that already failed to produce a split in
-        // this round — they will not improve without a refinement step.
-        // Re-pop from flawed_states by continuing the loop.
-        if (unsplittable_abstract_states.count(flawed_state.abs_id)) {
-            continue;
-        }
-
         if (log.is_at_least_debug()) {
             log << "Use flawed state: " << flawed_state << endl;
         }
@@ -626,14 +744,17 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             last_refined_flawed_state = move(flawed_state);
             return split;
         } else {
-            // create_split returned nullptr — no valid split could be found
-            // for this abstract state despite a flaw existing. Mark it as
-            // unsplittable for this round and try the next flawed state.
-            unsplittable_abstract_states.insert(flawed_state.abs_id);
+            // create_split returned nullptr — no valid split could be
+            // found for this abstract state despite a flaw existing. Mark
+            // it as unsplittable for this round and try the next flawed
+            // state (looping back to the top).
+            unsplittable_abs_states.insert(flawed_state.abs_id);
             last_refined_flawed_state = FlawedState::no_state;
         }
     }
 }
+
+
 
 FlawSearch::FlawSearch(
     const shared_ptr<AbstractTask> &task, const Abstraction &abstraction,

@@ -86,6 +86,9 @@ class FlawSearch {
     std::unique_ptr<Split> create_split(
         const std::vector<StateID> &state_ids, int abstract_state_id);
 
+    FlawedState get_next_usable_flawed_state(
+        std::unordered_set<int> unsplittable_abstract_states);
+
     FlawedState get_flawed_state_with_min_h();
     std::unique_ptr<Split> get_single_split(
         const utils::CountdownTimer &cegar_timer);
