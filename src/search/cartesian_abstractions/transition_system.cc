@@ -36,19 +36,19 @@ void TransitionSystem::rewire(
     const AbstractState &v2, int var, utils::LogProxy &log) {
     enlarge_vectors_by_one();
 
-    rewirer.consistency_check(v1, v2);
+    pair<bool, bool> cons = rewirer.consistency_check(v1, v2, var);
 
     num_non_loops -= (incoming[v_id].size() + outgoing[v_id].size());
 
-    rewirer.rewire_transitions(incoming, outgoing, states, v_id, v1, v2,
-        var);
+    rewirer.rewire_transitions(
+        incoming, outgoing, states, v_id, v1, v2, var, cons);
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
     num_non_loops += incoming[v1_id].size() + incoming[v2_id].size() +
                      outgoing[v1_id].size() + outgoing[v2_id].size();
 
     int num_parent_loops = loops[v_id].size();
-    rewirer.rewire_loops(loops, incoming, outgoing, v_id, v1, v2, var);
+    rewirer.rewire_loops(loops, incoming, outgoing, v_id, v1, v2, var, cons);
     int num_children_loops = loops[v1_id].size() + loops[v2_id].size();
     int num_transitions_between_children =
         count_if(

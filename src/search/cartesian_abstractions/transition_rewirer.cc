@@ -18,7 +18,7 @@ namespace cartesian_abstractions {
 static pair<vector<int>,vector<int>> compute_var_dependency(const TaskProxy task, const VariableProxy var) {
     vector<int> var_depends_on;
     vector<int> vars_affected_by_var;
-    if (task_properties::has_axioms(task)) {
+    if (!task_properties::has_axioms(task)) {
         return make_pair(var_depends_on, vars_affected_by_var);
     }
     unordered_set<int> seen_dep;
@@ -36,7 +36,7 @@ static pair<vector<int>,vector<int>> compute_var_dependency(const TaskProxy task
             for (FactProxy f : axiom.get_effects()[0].get_conditions()) {
                 if (f.get_var_id() == var_id) {
                     if (seen_aff.insert(axiom.get_effects()[0].get_fact().get_var_id()).second) {
-                        var_depends_on.push_back(axiom.get_effects()[0].get_fact().get_var_id());
+                        vars_affected_by_var.push_back(axiom.get_effects()[0].get_fact().get_var_id());
                         break;
                     }
                 }
@@ -103,20 +103,20 @@ TransitionRewirer::TransitionRewirer(const TaskProxy &task,
 void TransitionRewirer::rewire_transitions(
     deque<Transitions> &incoming, deque<Transitions> &outgoing,
     const AbstractStates &states, int v_id, const AbstractState &v1,
-    const AbstractState &v2, int var) const {
+    const AbstractState &v2, int var, const pair<bool, bool> cons) const {
     // if task contains derived variables, check if both new states are still
     // consistent after extension and remove all the incoming / outgoing transitions
     // to them if not.
-    rewire_incoming_transitions(incoming, outgoing, states, v_id, v1, v2,
-        var);
-    rewire_outgoing_transitions(incoming, outgoing, states, v_id, v1, v2,
-        var);
+    rewire_incoming_transitions(
+        incoming, outgoing, states, v_id, v1, v2, var, cons);
+    rewire_outgoing_transitions(
+        incoming, outgoing, states, v_id, v1, v2, var, cons);
 }
 
 void TransitionRewirer::rewire_incoming_transitions(
     deque<Transitions> &incoming, deque<Transitions> &outgoing,
     const AbstractStates &states, int v_id, const AbstractState &v1,
-    const AbstractState &v2, int var) const {
+    const AbstractState &v2, int var, const pair<bool, bool> cons) const {
     /* State v has been split into v1 and v2. Now for all transitions
        u->v we need to add transitions u->v1, u->v2, or both.
        We check for conflicts on derived variables in all cases, since even
@@ -127,14 +127,6 @@ void TransitionRewirer::rewire_incoming_transitions(
 
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
-
-    // we only need to check if the new states are still axiom consistent if
-    // the task contains axioms and the split variable is a) derived or
-    // b) has derived variables depending on it.
-    // We assume that previously discovered inconsistent states get disconnected
-    // from the transition systems and are never split themselves.
-    bool derived_dep = vars[var].is_derived() || !get_var_dependencies(var).second.empty();
-    pair<bool, bool> cons = (task_has_axioms && derived_dep) ? consistency_check(v1, v2) : make_pair(true, true);
 
     Transitions old_incoming = move(incoming[v_id]);
 
@@ -159,6 +151,8 @@ void TransitionRewirer::rewire_incoming_transitions(
 
         int post = UNDEFINED;
         bool derived = vars[var].is_derived(); // check if var is derived
+        // TODO: evtl conflict_derived_domains umstrukturieren, damit
+        // die teure extension von update(u, op_id) nur einmal berechnet werden muss
         bool derived_conflict_v1 = !cons.first || conflict_derived_domains(
                 u.get_cartesian_set(), op_id, v1.get_cartesian_set(), var);
         bool derived_conflict_v2 = !cons.second || conflict_derived_domains(
@@ -225,19 +219,11 @@ void TransitionRewirer::rewire_incoming_transitions(
 void TransitionRewirer::rewire_outgoing_transitions(
     deque<Transitions> &incoming, deque<Transitions> &outgoing,
     const AbstractStates &states, int v_id, const AbstractState &v1,
-    const AbstractState &v2, int var) const {
+    const AbstractState &v2, int var, const pair<bool, bool> cons) const {
     /* State v has been split into v1 and v2. Now for all transitions
        v->w we need to add transitions v1->w, v2->w, or both. */
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
-
-    // we only need to check if the new states are still axiom consistent if
-    // the task contains axioms and the split variable is a) derived or
-    // b) has derived variables depending on it.
-    // We assume that previously discovered inconsistent states get disconnected
-    // from the transition systems and are never split themselves.
-    bool derived_dep = vars[var].is_derived() || !get_var_dependencies(var).second.empty();
-    pair<bool, bool> cons = (task_has_axioms && derived_dep) ? consistency_check(v1, v2) : make_pair(true, true);
 
     Transitions old_outgoing = move(outgoing[v_id]);
 
@@ -322,15 +308,7 @@ void TransitionRewirer::rewire_outgoing_transitions(
 void TransitionRewirer::rewire_loops(
     deque<Loops> &loops, deque<Transitions> &incoming,
     deque<Transitions> &outgoing, int v_id, const AbstractState &v1,
-    const AbstractState &v2, int var) const {
-
-    // we only need to check if the new states are still axiom consistent if
-    // the task contains axioms and the split variable is a) derived or
-    // b) has derived variables depending on it.
-    // We assume that previously discovered inconsistent states get disconnected
-    // from the transition systems and are never split themselves.
-    bool derived_dep = vars[var].is_derived() || !get_var_dependencies(var).second.empty();
-    pair<bool, bool> cons = (task_has_axioms && derived_dep) ? consistency_check(v1, v2) : make_pair(true, true);
+    const AbstractState &v2, int var, const pair<bool, bool> cons) const {
 
     Loops old_loops = move(loops[v_id]);
     assert(loops[v_id].empty());
@@ -558,6 +536,10 @@ bool TransitionRewirer::conflict_derived_domains(
     if (!task_has_axioms) {
         return false;
     }
+    if (!vars[var_id].is_derived() && get_var_dependencies(var_id).second.empty()) {
+        return false;
+    }
+
     CartesianSet extended_a_o = extension_strategy_instance->get_extension(update_cartesian_set(a, op_id));
     //CartesianSet extended_b = extension_strategy_instance->get_extension(b);
     if (vars[var_id].is_derived()) {  // split variable is derived, check conflict for the variable
@@ -621,7 +603,8 @@ bool TransitionRewirer::precondition_derived_conflict(
     return false;
 }
 
-std::pair<bool, bool> TransitionRewirer::consistency_check(const AbstractState &v1, const AbstractState &v2) const {
+std::pair<bool, bool> TransitionRewirer::consistency_check(
+    const AbstractState &v1, const AbstractState &v2, const int var) const {
     /*  checks two abstract states v1 and v2 for consistency
      *  w.r.t. the set of axioms in the given task. If the extension of the
      *  respective Cartesian set contains an empty variable domain for one of
@@ -630,6 +613,16 @@ std::pair<bool, bool> TransitionRewirer::consistency_check(const AbstractState &
      *  where consistency_vx is true if the state vx is consistent, and false
      *  else.
      */
+    // we only need to check if the new states are still axiom consistent if
+    // the task contains axioms and the split variable is a) derived or
+    // b) has derived variables depending on it.
+    // We assume that previously discovered inconsistent states get disconnected
+    // from the transition systems and are never split themselves.
+    bool derived_dep = vars[var].is_derived() || !get_var_dependencies(var).second.empty();
+    if (!task_has_axioms || !derived_dep) {
+        return make_pair(true, true);
+    }
+
     bool v1_consistent = true;
     bool v2_consistent = true;
     std::vector< int > derived_vars;
@@ -654,18 +647,18 @@ std::pair<bool, bool> TransitionRewirer::consistency_check(const AbstractState &
                 v2_empty_dom.push_back(var);
             }
         }
-        if (!v1_consistent) {
-            CartesianSet base_v1 = v1.get_cartesian_set();
-            for (int var : derived_vars) {
-                base_v1.add_all(var);
-            }
-        }
-        if (!v2_consistent) {
-            CartesianSet base_v2 = v2.get_cartesian_set();
-            for (int var : derived_vars) {
-                base_v2.add_all(var);
-            }
-        }
+        // if (!v1_consistent) {
+        //     CartesianSet base_v1 = v1.get_cartesian_set();
+        //     for (int var : derived_vars) {
+        //         base_v1.add_all(var);
+        //     }
+        // }
+        // if (!v2_consistent) {
+        //     CartesianSet base_v2 = v2.get_cartesian_set();
+        //     for (int var : derived_vars) {
+        //         base_v2.add_all(var);
+        //     }
+        // }
     }
 
     return std::pair<bool, bool>(v1_consistent, v2_consistent);

@@ -40,11 +40,11 @@ class TransitionRewirer {
     void rewire_incoming_transitions(
         std::deque<Transitions> &incoming, std::deque<Transitions> &outgoing,
         const AbstractStates &states, int v_id, const AbstractState &v1,
-        const AbstractState &v2, int var) const;
+        const AbstractState &v2, int var, std::pair<bool, bool> cons) const;
     void rewire_outgoing_transitions(
         std::deque<Transitions> &incoming, std::deque<Transitions> &outgoing,
         const AbstractStates &states, int v_id, const AbstractState &v1,
-        const AbstractState &v2, int var) const;
+        const AbstractState &v2, int var, std::pair<bool, bool> cons) const;
     CartesianSet update_cartesian_set(const CartesianSet &a, int op_id) const;
     bool conflict_derived_domains(
         const CartesianSet &a, int op_id, const CartesianSet &b,
@@ -80,12 +80,12 @@ public:
     void rewire_transitions(
         std::deque<Transitions> &incoming, std::deque<Transitions> &outgoing,
         const AbstractStates &states, int v_id, const AbstractState &v1,
-        const AbstractState &v2, int var) const;
+        const AbstractState &v2, int var, std::pair<bool, bool> cons) const;
 
     void rewire_loops(
         std::deque<Loops> &loops, std::deque<Transitions> &incoming,
         std::deque<Transitions> &outgoing, int v_id, const AbstractState &v1,
-        const AbstractState &v2, int var) const;
+        const AbstractState &v2, int var, std::pair<bool, bool> cons) const;
 
     const std::vector<FactPair> &get_preconditions(int op_id) const {
         assert(utils::in_bounds(op_id, preconditions_by_operator));
@@ -114,7 +114,7 @@ public:
 
     int get_num_operators() const;
     std::pair<bool, bool> consistency_check(
-    const AbstractState &v1, const AbstractState &v2) const;
+        const AbstractState &v1, const AbstractState &v2, int var) const;
 };
 }
 

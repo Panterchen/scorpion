@@ -300,12 +300,12 @@ void ShortestPaths::update_incrementally(
        will be updated again if v1 or v2 are dirty. */
     if (use_cache) {
         num_parents -= (children[v].size() + parents[v].size());
-        if (log.is_at_least_debug()) {
-            rewirer.consistency_check(abstraction.get_state(v1), abstraction.get_state(v2)); 
-        }
+        pair<bool, bool> cons = rewirer.consistency_check(
+                abstraction.get_state(v1), abstraction.get_state(v2), var);
+
         rewirer.rewire_transitions(
             children, parents, abstraction.get_states(), v,
-            abstraction.get_state(v1), abstraction.get_state(v2), var);
+            abstraction.get_state(v1), abstraction.get_state(v2), var, cons);
         num_parents += children[v1].size() + children[v2].size() +
                        parents[v1].size() + parents[v2].size();
     } else {
