@@ -15,49 +15,6 @@ using namespace std;
 
 namespace cartesian_abstractions {
 
-static pair<vector<int>,vector<int>> compute_var_dependency(const TaskProxy task, const VariableProxy var) {
-    vector<int> var_depends_on;
-    vector<int> vars_affected_by_var;
-    if (!task_properties::has_axioms(task)) {
-        return make_pair(var_depends_on, vars_affected_by_var);
-    }
-    unordered_set<int> seen_dep;
-    unordered_set<int> seen_aff;
-    AxiomsProxy axioms = task.get_axioms();
-    int var_id = var.get_id();
-    for (OperatorProxy axiom : axioms) {
-        if (var_id == axiom.get_effects()[0].get_fact().get_var_id()) {
-            for (FactProxy f : axiom.get_effects()[0].get_conditions()) {
-                if (seen_dep.insert(f.get_var_id()).second) {
-                    var_depends_on.push_back(f.get_var_id());
-                }
-            }
-        } else {
-            for (FactProxy f : axiom.get_effects()[0].get_conditions()) {
-                if (f.get_var_id() == var_id) {
-                    if (seen_aff.insert(axiom.get_effects()[0].get_fact().get_var_id()).second) {
-                        vars_affected_by_var.push_back(axiom.get_effects()[0].get_fact().get_var_id());
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    // sort variables in the dependency lists
-    sort(var_depends_on.begin(), var_depends_on.end());
-    sort(vars_affected_by_var.begin(), vars_affected_by_var.end());
-    return make_pair(var_depends_on, vars_affected_by_var);
-}
-
-static vector<pair<vector<int>, vector<int>>> compute_variable_dependencies(const TaskProxy task) {
-    vector<pair<vector<int>, vector<int>>> variable_dependencies;
-    variable_dependencies.reserve(task.get_variables().size());
-    for (VariableProxy var : task.get_variables()) {
-        variable_dependencies.push_back(compute_var_dependency(task, var));
-    }
-    return variable_dependencies;
-}
-
 static void remove_transitions_with_given_target(
     Transitions &transitions, int state_id) {
     erase_if(transitions, [state_id](const Transition &t) {
@@ -89,13 +46,15 @@ static void add_loop(deque<Loops> &loops, int state_id, int op_id) {
 TransitionRewirer::TransitionRewirer(const TaskProxy &task,
     const std::shared_ptr<ExtensionStrategy> &extension_strategy,
     const std::shared_ptr<RegressionStrategy> &regression_strategy,
+    const std::shared_ptr<const VariableDependencies> &variable_dependencies,
     bool verify_transitions_debug)
     : vars(task.get_variables()),
     extension_strategy_instance(extension_strategy->create(task)),
     regression_strategy_instance(regression_strategy->create(task, extension_strategy)),
     preconditions_by_operator(compute_preconditions_by_operator(task.get_operators())),
     postconditions_by_operator(compute_postconditions_by_operator(task.get_operators())),
-    vars_dependencies(compute_variable_dependencies(task)),
+    variable_dependencies(variable_dependencies),
+    // vars_dependencies(compute_variable_dependencies(task)),
     verify_transitions_debug(verify_transitions_debug),
     task_has_axioms(task_properties::has_axioms(task)) {
 }

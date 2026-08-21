@@ -41,8 +41,10 @@ CEGAR::CEGAR(
               ? max_transitions
               : INF),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
+      variable_dependencies(make_shared<const VariableDependencies>(task_proxy)),
       transition_rewirer(
-          make_shared<TransitionRewirer>(task_proxy, extension_strategy, regression_strategy,
+          make_shared<TransitionRewirer>(task_proxy, extension_strategy,
+              regression_strategy, variable_dependencies,
               verify_transitions_debug)),
       abstraction(make_unique<Abstraction>(
           task, transition_rewirer, transition_representation, log)),
@@ -61,7 +63,7 @@ CEGAR::CEGAR(
         task, *abstraction, *shortest_paths, rng, pick_flawed_abstract_state,
         pick_split, tiebreak_split, max_concrete_states_per_abstract_state,
         max_state_expansions, extension_strategy, regression_strategy,
-        log);
+        variable_dependencies, log);
 
     if (log.is_at_least_normal()) {
         log << "Start building abstraction." << endl;

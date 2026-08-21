@@ -17,6 +17,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <unordered_set>
 
 using namespace std;
 
@@ -24,6 +25,94 @@ namespace cartesian_abstractions {
 class SubtaskGenerator;
 class ExtensionStrategy;
 class RegressionStrategy;
+
+VariableDependencies::VariableDependencies(const TaskProxy &task)
+    : vars(task.get_variables()) {
+    int num_vars = vars.size();
+    deps.resize(num_vars);
+    rules.resize(num_vars);
+    basic_deps_cache.resize(num_vars);
+    for (VariableProxy var : vars) {
+        rules[var.get_id()].resize(var.get_domain_size());
+    }
+
+    if (!task_properties::has_axioms(task)) {
+        return;
+    }
+
+    vector<unordered_set<int>> seen_dep(num_vars);
+    vector<unordered_set<int>> seen_aff(num_vars);
+
+    for (OperatorProxy axiom : task.get_axioms()) {
+        FactPair head = axiom.get_effects()[0].get_fact().get_pair();
+        int head_var = head.var;
+
+        vector<FactPair> body;
+        for (FactProxy cond : axiom.get_effects()[0].get_conditions()) {
+            body.push_back(cond.get_pair());
+        }
+
+        rules[head_var][head.value].push_back(AxiomRule{head, body});
+
+        for (const FactPair &cond : body) {
+            int cond_var = cond.var;
+            if (seen_dep[head_var].insert(cond_var).second) {
+                deps[head_var].first.push_back(cond_var);
+            }
+            if (seen_aff[cond_var].insert(head_var).second) {
+                deps[cond_var].second.push_back(head_var);
+            }
+        }
+    }
+
+    for (auto &[depends_on, affected_by] : deps) {
+        sort(depends_on.begin(), depends_on.end());
+        sort(affected_by.begin(), affected_by.end());
+    }
+}
+
+const pair<vector<int>, vector<int>> &VariableDependencies::get(int var_id) const {
+    assert(var_id >= 0 && var_id < static_cast<int>(deps.size()));
+    return deps[var_id];
+}
+
+const std::vector<AxiomRule> &VariableDependencies::get_rules(
+    int var_id, int value) const {
+    assert(var_id >= 0 && var_id < static_cast<int>(rules.size()));
+    assert(value >= 0 && value < static_cast<int>(rules[var_id].size()));
+    return rules[var_id][value];
+}
+
+void VariableDependencies::resolve_basic_dependencies(
+    int var_id, std::vector<int> &result, std::vector<bool> &visited) const {
+    if (visited[var_id]) {
+        return;
+    }
+    visited[var_id] = true;
+    if (!vars[var_id].is_derived()) {
+        result.push_back(var_id);
+        return;
+    }
+    for (int dep_var : deps[var_id].first) {
+        resolve_basic_dependencies(dep_var, result, visited);
+    }
+
+}
+
+const std::vector<int> &VariableDependencies::get_basic_dependencies(
+    int var_id) const {
+    assert(var_id >= 0 && var_id < static_cast<int>(basic_deps_cache.size()));
+    if (!basic_deps_cache[var_id].has_value()) {
+        vector<int> result;
+        vector<bool> visited(vars.size(), false);
+        resolve_basic_dependencies(var_id, result, visited);
+        sort(result.begin(), result.end());
+        result.erase(unique(result.begin(), result.end()), result.end());
+        basic_deps_cache[var_id] = move(result);
+    }
+    return *basic_deps_cache[var_id];
+}
+
 bool g_hacked_sort_transitions = false;
 
 static bool operator_applicable(

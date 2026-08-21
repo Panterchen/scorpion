@@ -8,6 +8,8 @@
 #include "../utils/hash.h"
 
 #include <memory>
+#include <optional>
+#include <utility>
 #include <vector>
 
 class AbstractTask;
@@ -21,7 +23,40 @@ class Feature;
 }
 
 namespace cartesian_abstractions {
+
+struct AxiomRule {
+    FactPair head;                    // (var_id, val) Axiom head
+    std::vector<FactPair> body;       // Axiom Body
+};
+
 class Abstraction;
+
+class VariableDependencies {
+    // deps[var_id] =   (Variables affecting var_id (only non-empty for derived
+    //                      var_id);
+    //                   Variables, directly affected by var_id)
+    std::vector<std::pair<std::vector<int>, std::vector<int>>> deps;
+
+    // rules[var_id][value] = all AxiomRules with head (var_id, value)
+    std::vector<std::vector<std::vector<AxiomRule>>> rules;
+
+    // lazy cache for transitive closure of basic variable dependencies per var
+    mutable std::vector<std::optional<std::vector<int>>> basic_deps_cache;
+
+    VariablesProxy vars;
+
+    void resolve_basic_dependencies(
+        int var_id, std::vector<int> &result, std::vector<bool> &visited) const;
+
+    public:
+        explicit VariableDependencies(const TaskProxy &task);
+
+        const std::pair<std::vector<int>, std::vector<int>> &get(int var_id) const;
+
+        const std::vector<AxiomRule> &get_rules(int var_id, int value) const;
+
+        const std::vector<int> &get_basic_dependencies(int var_id) const;
+};
 
 extern bool g_hacked_sort_transitions;
 

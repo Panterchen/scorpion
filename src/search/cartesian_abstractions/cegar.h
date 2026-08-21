@@ -25,6 +25,7 @@ enum class DotGraphVerbosity;
 class ShortestPaths;
 class ExtensionStrategy;
 class RegressionStrategy;
+class VariableDependencies;
 
 /*
   Iteratively refine a Cartesian abstraction with counterexample-guided
@@ -42,7 +43,7 @@ class CEGAR {
     const int max_states;
     const int max_stored_transitions;
     const PickFlawedAbstractState pick_flawed_abstract_state;
-
+    const std::shared_ptr<const VariableDependencies> variable_dependencies;
     const std::shared_ptr<TransitionRewirer> transition_rewirer;
     std::unique_ptr<Abstraction> abstraction;
     std::unique_ptr<ShortestPaths> shortest_paths;

@@ -15,6 +15,7 @@
 
 #include "regression_strategy.h"
 #include "extension_strategy.h"
+#include "utils.h"
 
 namespace utils {
 class CountdownTimer;
@@ -26,6 +27,7 @@ namespace cartesian_abstractions {
 class Abstraction;
 class ShortestPaths;
 class ExtensionStrategy;
+class VariableDependencies;
 
 // Variants from ICAPS 2022 paper (in order): FIRST, MIN_H, MAX_H, MIN_H,
 // BATCH_MIN_H. See bottom of .cc file for documentation.
@@ -48,6 +50,7 @@ class FlawSearch {
     const PickFlawedAbstractState pick_flawed_abstract_state;
     const std::shared_ptr<ExtensionStrategy> extension_strategy;
     const std::unique_ptr<RegressionStrategyInstance> regression_strategy_instance;
+    const std::shared_ptr<const VariableDependencies> variable_dependencies;
     const int max_concrete_states_per_abstract_state;
     const int max_state_expansions;
     mutable utils::LogProxy log;
@@ -105,6 +108,7 @@ public:
         int max_concrete_states_per_abstract_state, int max_state_expansions,
         const std::shared_ptr<ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<RegressionStrategy> &regression_strategy,
+        const std::shared_ptr<const VariableDependencies> &variable_dependencies,
         const utils::LogProxy &log);
 
     std::unique_ptr<Split> get_split(const utils::CountdownTimer &cegar_timer);

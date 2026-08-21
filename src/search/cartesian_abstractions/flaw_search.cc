@@ -257,43 +257,66 @@ static void get_deviation_splits(
     for (auto &[fact, count] : fact_count) {
         assert(count > 0);
         int var = fact.var;
-        if (!target_abs_state.contains(var, fact.value)
-            // && !task.get_variables()[var].is_derived()
-            ) {
-            // Note: we could precompute the "wanted" vector, but not the split.
-            // TODO should we skip flaws where the variable domain is already
-            // only size 1? TODO
-            vector<int> wanted = regression_strategy_instance.get_wanted_values(abs_state, target_abs_state, var, op_id);
-            if (wanted.empty()) {
-                /* With composed regression, the extended regression of t under op can
-                 * determine a derived variable value that is incompatible with a[v],
-                 * giving an empty intersection. This means a cannot reach t via op
-                 * for this derived variable — skip this split candidate.
-                 * (With naive regression this cannot happen since wanted = a[v].)
-                 * It should never happen for basic variables.
-                 */
-                OperatorProxy op_proxy = task.get_operators()[op_id];
-                std::cout << "Operator ID: " << op_id << " Name: " << op_proxy.get_name() << "\n    Preconditions: " << std::endl;
-                for (auto pre : op_proxy.get_preconditions()) {
-                    std::cout << "        Variable: " << pre.get_var_id() << ", Value: " << pre.get_value() << std::endl;
+        if (!target_abs_state.contains(var, fact.value)) {
+            if (!task.get_variables()[var].is_derived()) { // non-derived case
+                // Note: we could precompute the "wanted" vector, but not the split.
+                vector<int> wanted;
+                for (int value = 0; value < domain_sizes[var]; ++value) {
+                    if (abs_state.contains(var, value) &&
+                        target_abs_state.contains(var, value)) {
+                        wanted.push_back(value);
+                        }
                 }
-                std::cout << "    Effects:" << std::endl;
-                for (auto eff : op_proxy.get_effects()) {
-                    std::cout << "        Variable: " << eff.get_fact().get_var_id() << ", Value: " << eff.get_fact().get_value() << std::endl;
+                assert(!wanted.empty());
+                add_split(
+                    splits,
+                    Split(
+                        abs_state.get_id(), var, fact.value, move(wanted), count));
+            } else { // derived variable
+                bool found_split_on_var = false;
+                if (abs_state.get_cartesian_set().count(var) > 1) {
+                    vector<int> wanted = regression_strategy_instance.get_wanted_values(abs_state, target_abs_state, var, op_id);
+                    if (wanted.empty()) {
+                        /* With composed regression, the extended regression of t under op can
+                         * determine a derived variable value that is incompatible with a[v],
+                         * giving an empty intersection. This means a cannot reach t via op
+                         * for this derived variable — skip this split candidate.
+                         * (With naive regression this cannot happen since wanted = a[v].)
+                         * It should never happen for basic variables.
+                         */
+                        OperatorProxy op_proxy = task.get_operators()[op_id];
+                        std::cout << "Operator ID: " << op_id << " Name: " << op_proxy.get_name() << "\n    Preconditions: " << std::endl;
+                        for (auto pre : op_proxy.get_preconditions()) {
+                            std::cout << "        Variable: " << pre.get_var_id() << ", Value: " << pre.get_value() << std::endl;
+                        }
+                        std::cout << "    Effects:" << std::endl;
+                        for (auto eff : op_proxy.get_effects()) {
+                            std::cout << "        Variable: " << eff.get_fact().get_var_id() << ", Value: " << eff.get_fact().get_value() << std::endl;
+                        }
+                        assert(task.get_variables()[var].is_derived());
+                        continue;
+                    }
+                    assert(!wanted.empty());
+                    /* For derived variables, it can happen that the wanted vector is not
+                     * empty, but that it contains a single value and that this is the
+                     * only value in the abstract state 'a' we want to split. So we skip
+                     * derived variables with non-empty wanted vectors where |a[v]| = 1
+                    */
+                    if (wanted.size() < static_cast<size_t>(abs_state.get_cartesian_set().count(var))) {
+                        // remove degenerate splits on derived variables
+                        add_split(splits, Split(abs_state.get_id(), var, fact.value,
+                                                move(wanted), count));
+                        found_split_on_var = true;
+                    }
                 }
-                assert(task.get_variables()[var].is_derived());
-                continue;
-            }
-            // assert(!wanted.empty());
-            /* For derived variables, it can happen that the wanted vector is not
-             * empty, but that it contains a single value and that this is the
-             * only value in the abstract state 'a' we want to split. So we skip
-             * derived variables with non-empty wanted vectors where |a[v]| = 1
-            */
-            if (wanted.size() < static_cast<size_t>(abs_state.get_cartesian_set().count(var))) {
-                // remove degenerate splits on derived variables
-                add_split(splits, Split(abs_state.get_id(), var, fact.value,
-                                        move(wanted), count));
+                if (!found_split_on_var) {
+                    // TODO: calculate split on basic variables that var depends on
+                    // TODO: pass in the variable dependencies for var
+                    VariableDependencies variable_dependencies(task);
+                    vector<AxiomRule> rules = variable_dependencies.get_rules(var, fact.value);
+                    vector<int> dep_vars;
+
+                }
             }
         }
     }
@@ -724,6 +747,7 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
                 // A fresh search found nothing beyond already-known-unsplittable
                 // states — no further progress possible this round, stop.
                 last_refined_flawed_state = FlawedState::no_state;
+                // std::cout<< "Kein valider Split für aktuelle FlawedStates gefunden"<<std::endl;
                 return nullptr;
             }
         }
@@ -731,6 +755,7 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             log << "Use flawed state: " << flawed_state << endl;
         }
 
+        // std::cout<< "Angekommen!!!"<<std::endl;
         unique_ptr<Split> split =
             create_split(flawed_state.concrete_states, flawed_state.abs_id);
 
@@ -742,12 +767,18 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             // Valid split found — store the refined state for recycling
             // on the next call and return the split to the caller.
             last_refined_flawed_state = move(flawed_state);
+            // std::cout << "Split berechnet!!!" << std::endl;
             return split;
         } else {
             // create_split returned nullptr — no valid split could be
             // found for this abstract state despite a flaw existing. Mark
             // it as unsplittable for this round and try the next flawed
             // state (looping back to the top).
+            // TODO: hier nicht in die unsplittable states packen, sondern
+            // split anders berechnen... (Annahme aktuell: leerer wanted vector)
+            // -> problem liegt in derived variable..., statt auf derived var
+            // selbst zu splitten, auf einer der basic vars splitten von denen
+            // derived var abhängt
             unsplittable_abs_states.insert(flawed_state.abs_id);
             last_refined_flawed_state = FlawedState::no_state;
         }
@@ -764,6 +795,7 @@ FlawSearch::FlawSearch(
     int max_state_expansions,
     const shared_ptr<ExtensionStrategy> &extension_strategy,
     const shared_ptr<RegressionStrategy> &regression_strategy,
+    const shared_ptr<const VariableDependencies> &variable_dependencies,
     const utils::LogProxy &log)
     : task_proxy(*task),
       domain_sizes(get_domain_sizes(task_proxy)),
@@ -774,6 +806,7 @@ FlawSearch::FlawSearch(
       pick_flawed_abstract_state(pick_flawed_abstract_state),
       regression_strategy_instance(regression_strategy->create(task_proxy,
           extension_strategy)),
+      variable_dependencies(variable_dependencies),
       max_concrete_states_per_abstract_state(
           max_concrete_states_per_abstract_state),
       max_state_expansions(max_state_expansions),

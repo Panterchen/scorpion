@@ -1,11 +1,12 @@
 #ifndef CARTESIAN_ABSTRACTIONS_TRANSITION_REWIRER_H
 #define CARTESIAN_ABSTRACTIONS_TRANSITION_REWIRER_H
 
-#include "types.h"
-
-#include "../utils/collections.h"
 #include "extension_strategy.h"
 #include "regression_strategy.h"
+#include "types.h"
+#include "utils.h"
+
+#include "../utils/collections.h"
 
 #include <cassert>
 #include <deque>
@@ -19,6 +20,7 @@ class TaskProxy;
 namespace cartesian_abstractions {
 class ExtensionStrategy;
 class RegressionStrategy;
+class VariableDependencies;
 
 class TransitionRewirer {
 
@@ -29,7 +31,7 @@ class TransitionRewirer {
     const std::vector<std::vector<FactPair>> preconditions_by_operator;
     const std::vector<std::vector<FactPair>> postconditions_by_operator;
 
-    const std::vector<std::pair<std::vector<int>, std::vector<int>>> vars_dependencies;
+    const std::shared_ptr<const VariableDependencies> variable_dependencies;
 
     const bool verify_transitions_debug;
     const bool task_has_axioms;
@@ -75,6 +77,7 @@ class TransitionRewirer {
 public:
     explicit TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategy> &extension_strategy,
         const std::shared_ptr<RegressionStrategy> &regression_strategy,
+        const std::shared_ptr<const VariableDependencies> &variable_dependencies,
         bool verify_transitions_debug);
 
     void rewire_transitions(
@@ -104,12 +107,7 @@ public:
     }
 
     const std::pair<std::vector<int>,std::vector<int>> &get_var_dependencies(int var_id) const {
-        assert(utils::in_bounds(var_id, vars_dependencies));
-        return vars_dependencies[var_id];
-    }
-
-    const std::vector<std::pair<std::vector<int>,std::vector<int>>> &get_vars_dependencies() const {
-        return vars_dependencies;
+        return variable_dependencies->get(var_id);
     }
 
     int get_num_operators() const;
