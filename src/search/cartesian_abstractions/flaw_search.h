@@ -40,6 +40,27 @@ enum class PickFlawedAbstractState {
     BATCH_MIN_H
 };
 
+// Reasons why no split is returned, to better differentiate termination condition
+// in CEGAR::CEGAR() instead of interpreting nullptr as SOLVED.
+enum class StopReason {
+    NONE,
+    SOLVED,
+    TIMEOUT,
+    MEMORY_LIMIT,
+    REFINEMENT_STALLED,
+};
+
+struct FactPairHash {
+    size_t operator()(FactPair fact) const {
+        utils::HashState hash_state;
+        hash_state.feed(fact.var);
+        hash_state.feed(fact.value);
+        return hash_state.get_hash64();
+    }
+};
+
+using CompactFactMap = phmap::flat_hash_map<FactPair, int, FactPairHash>;
+
 class FlawSearch {
     TaskProxy task_proxy;
     const std::vector<int> domain_sizes;
@@ -77,6 +98,13 @@ class FlawSearch {
     utils::Timer compute_splits_timer;
     utils::Timer pick_split_timer;
 
+    // Termination Condition
+    StopReason last_stop_reason = StopReason::NONE;
+
+    // Rescue Splits
+    int consecutive_rescue_splits = 0;
+    static const int MAX_CONSECUTIVE_RESCUE_SPLITS = 20;
+
     int get_abstract_state_id(const State &state) const;
     Cost get_h_value(int abstract_state_id) const;
     void add_flaw(int abs_id, const State &state);
@@ -85,6 +113,21 @@ class FlawSearch {
     void initialize();
     SearchStatus step();
     SearchStatus search_for_flaws(const utils::CountdownTimer &cegar_timer);
+
+    bool add_candidates_for_basic_targets(
+        const std::vector<AxiomSplitTarget> &targets, int count,
+        const AbstractState &abs_state, std::vector<std::vector<Split>> &splits,
+        const AbstractState &target_abs_state) const;
+
+    void add_axiom_fallback_candidates(
+        const AbstractState &abs_state, const AbstractState &target_abs_state,
+        int var, int bad_value, int count,
+        std::vector<std::vector<Split>> &splits) const;
+
+    void get_deviation_splits(
+        const AbstractState &abs_state, const CompactFactMap &fact_count,
+        const AbstractState &target_abs_state, int op_id,
+        std::vector<std::vector<Split>> &splits) const;
 
     std::unique_ptr<Split> create_split(
         const std::vector<StateID> &state_ids, int abstract_state_id);
@@ -113,6 +156,8 @@ public:
 
     std::unique_ptr<Split> get_split(const utils::CountdownTimer &cegar_timer);
     std::unique_ptr<Split> get_split_legacy(const Solution &solution);
+
+    StopReason get_last_stop_reason() const { return last_stop_reason; }
 
     void print_statistics() const;
 };

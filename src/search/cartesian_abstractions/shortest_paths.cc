@@ -305,7 +305,7 @@ void ShortestPaths::update_incrementally(
 
         rewirer.rewire_transitions(
             children, parents, abstraction.get_states(), v,
-            abstraction.get_state(v1), abstraction.get_state(v2), var, cons);
+            abstraction.get_state(v1), abstraction.get_state(v2), var, cons, log);
         num_parents += children[v1].size() + children[v2].size() +
                        parents[v1].size() + parents[v2].size();
     } else {

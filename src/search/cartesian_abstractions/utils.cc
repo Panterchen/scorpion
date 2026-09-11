@@ -8,9 +8,9 @@
 #include "transition_system.h"
 
 #include "../plugins/plugin.h"
+#include "../task_utils/task_properties.h"
 #include "../utils/logging.h"
 #include "../utils/rng_options.h"
-#include "../task_utils/task_properties.h"
 
 #include <algorithm>
 #include <cassert>
@@ -18,6 +18,7 @@
 #include <iostream>
 #include <map>
 #include <unordered_set>
+#include <variant>
 
 using namespace std;
 
@@ -32,8 +33,14 @@ VariableDependencies::VariableDependencies(const TaskProxy &task)
     deps.resize(num_vars);
     rules.resize(num_vars);
     basic_deps_cache.resize(num_vars);
+    basic_targets_cache.resize(num_vars);
+    transitive_dependents_cache.resize(num_vars);
     for (VariableProxy var : vars) {
         rules[var.get_id()].resize(var.get_domain_size());
+        basic_targets_cache[var.get_id()].resize(var.get_domain_size());
+        for (int c = 0; c < var.get_domain_size(); ++c) {
+            basic_targets_cache[var.get_id()][c].resize(2);
+        }
     }
 
     if (!task_properties::has_axioms(task)) {
@@ -111,6 +118,89 @@ const std::vector<int> &VariableDependencies::get_basic_dependencies(
         basic_deps_cache[var_id] = move(result);
     }
     return *basic_deps_cache[var_id];
+}
+
+void VariableDependencies::resolve_basic_targets(
+    int var_id, int value, bool force, vector<AxiomSplitTarget> &result,
+    vector<vector<vector<bool>>> &visited) const {
+    if (visited[var_id][value][force]) {
+        return;
+    }
+    visited[var_id][value][force] = true;
+    const vector<AxiomRule> &direct_rules = get_rules(var_id, value);
+    if (!direct_rules.empty()) {
+        for (const AxiomRule &rule : direct_rules) {
+            for (const FactPair &cond : rule.body) {
+                if (!vars[cond.var].is_derived()) {
+                    cout << "  basic condition: var=" << cond.var << " value=" << cond.value << endl; // TODO: debug output remove later
+                    result.push_back({cond, force});
+                } else {
+                    cout << "  derived condition: var=" << cond.var << " value=" << cond.value << endl; // TODO: debug output remove later
+                    resolve_basic_targets(cond.var, cond.value, force, result, visited);
+                }
+            }
+        }
+        return;
+    }
+    /* If no rule explicitly defines (var_id, value), it is the default value of
+     * the variable under Negation-as-failure logic. We approximate 'value holds'
+     * by 'prevent any rule for any other value of var_id'. Every of this
+     * preventions isn't a guarantee by itself, but CEGAR can iteratively tackle
+     * them. It is sufficient to make progress each round.
+     */
+    int domain_size = static_cast<int>(rules[var_id].size()); // use variable domain size from initailisation
+    for (int other_value = 0; other_value < domain_size; ++other_value) {
+        if (other_value != value) {
+            // TODO: double check if this actually does what its supposed to...
+            resolve_basic_targets(var_id, other_value, !force, result, visited);
+        }
+    }
+}
+
+const vector<AxiomSplitTarget> &VariableDependencies::get_basic_targets(
+    int var_id, int value, bool force) const {
+    assert(var_id >= 0 && var_id < static_cast<int>(basic_targets_cache.size()));
+    assert(value >= 0 &&
+        utils::in_bounds(value, basic_targets_cache[var_id]));
+    assert(utils::in_bounds(force, basic_targets_cache[var_id][value]));
+    if (!basic_targets_cache[var_id][value][force].has_value()) {
+        vector<AxiomSplitTarget> result;
+        vector<vector<vector<bool>>> visited(vars.size());
+        for (VariableProxy v : vars) {
+            visited[v.get_id()].resize(v.get_domain_size());
+            for (int c = 0; c < v.get_domain_size(); ++c) {
+                visited[v.get_id()][c].resize(2, false);
+            }
+        }
+        resolve_basic_targets(var_id, value, force, result, visited);
+        sort(result.begin(), result.end());
+        result.erase(unique(result.begin(), result.end()), result.end());
+        basic_targets_cache[var_id][value][force] = move(result);
+    }
+    return *basic_targets_cache[var_id][value][force];
+}
+
+void VariableDependencies::resolve_transitive_dependents(
+    int var_id, vector<int> &result, vector<bool> &visited) const {
+    if (visited[var_id]) return;
+    visited[var_id] = true;
+    for (int dependent : deps[var_id].second) {
+        result.push_back(dependent);
+        resolve_transitive_dependents(dependent, result, visited);
+    }
+}
+
+const vector<int> &VariableDependencies::get_transitive_dependents(int var_id) const {
+    assert(var_id >= 0 && var_id < static_cast<int>(transitive_dependents_cache.size()));
+    if (!transitive_dependents_cache[var_id].has_value()) {
+        vector<int> result;
+        vector<bool> visited(vars.size(), false);
+        resolve_transitive_dependents(var_id, result, visited);
+        sort(result.begin(), result.end());
+        result.erase(unique(result.begin(), result.end()), result.end());
+        transitive_dependents_cache[var_id] = move(result);
+    }
+    return *transitive_dependents_cache[var_id];
 }
 
 bool g_hacked_sort_transitions = false;

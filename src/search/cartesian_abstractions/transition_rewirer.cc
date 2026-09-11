@@ -62,20 +62,22 @@ TransitionRewirer::TransitionRewirer(const TaskProxy &task,
 void TransitionRewirer::rewire_transitions(
     deque<Transitions> &incoming, deque<Transitions> &outgoing,
     const AbstractStates &states, int v_id, const AbstractState &v1,
-    const AbstractState &v2, int var, const pair<bool, bool> cons) const {
+    const AbstractState &v2, int var, const pair<bool, bool> cons,
+    utils::LogProxy &log) const {
     // if task contains derived variables, check if both new states are still
     // consistent after extension and remove all the incoming / outgoing transitions
     // to them if not.
     rewire_incoming_transitions(
-        incoming, outgoing, states, v_id, v1, v2, var, cons);
+        incoming, outgoing, states, v_id, v1, v2, var, cons, log);
     rewire_outgoing_transitions(
-        incoming, outgoing, states, v_id, v1, v2, var, cons);
+        incoming, outgoing, states, v_id, v1, v2, var, cons, log);
 }
 
 void TransitionRewirer::rewire_incoming_transitions(
     deque<Transitions> &incoming, deque<Transitions> &outgoing,
     const AbstractStates &states, int v_id, const AbstractState &v1,
-    const AbstractState &v2, int var, const pair<bool, bool> cons) const {
+    const AbstractState &v2, int var, const pair<bool, bool> cons,
+    utils::LogProxy &log) const {
     /* State v has been split into v1 and v2. Now for all transitions
        u->v we need to add transitions u->v1, u->v2, or both.
        We check for conflicts on derived variables in all cases, since even
@@ -83,6 +85,10 @@ void TransitionRewirer::rewire_incoming_transitions(
        value, and we may get different derived variable domains for v1 and v2
        after the split.
     */
+
+    if (log.is_at_least_debug()) {
+        log << "--- Rewire Incoming Transitions ---" << endl;
+    }
 
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
@@ -109,13 +115,22 @@ void TransitionRewirer::rewire_incoming_transitions(
         bool added_u_v2 = false;
 
         int post = UNDEFINED;
-        bool derived = vars[var].is_derived(); // check if var is derived
+        bool derived = vars[var].is_derived() ; // check if var is derived // TODO: also if any derived variable depends on var... I think...
+
         // TODO: evtl conflict_derived_domains umstrukturieren, damit
         // die teure extension von update(u, op_id) nur einmal berechnet werden muss
         bool derived_conflict_v1 = !cons.first || conflict_derived_domains(
                 u.get_cartesian_set(), op_id, v1.get_cartesian_set(), var);
         bool derived_conflict_v2 = !cons.second || conflict_derived_domains(
                 u.get_cartesian_set(), op_id, v2.get_cartesian_set(), var);
+
+        if (log.is_at_least_debug()) {
+            log << " from state " << u_id << ": " << u.get_cartesian_set()
+            << " via operator " << op_id << " post=" << post
+            << " derived=" << derived
+            << " conflict_v1=" << derived_conflict_v1
+            << " conflict_v2=" << derived_conflict_v2 << endl;
+        }
 
         if (derived) {
             // determine derived variable value
@@ -172,15 +187,25 @@ void TransitionRewirer::rewire_incoming_transitions(
             verify_rewiring_incoming(
                 u, v1, v2, op_id, added_u_v1, added_u_v2, cons, var);
         }
+        if (log.is_at_least_debug()) {
+            if (added_u_v1) log << "Added u -> v1" << endl;
+            if (added_u_v2) log << "Added u -> v2" << endl;
+        }
     }
 }
 
 void TransitionRewirer::rewire_outgoing_transitions(
     deque<Transitions> &incoming, deque<Transitions> &outgoing,
     const AbstractStates &states, int v_id, const AbstractState &v1,
-    const AbstractState &v2, int var, const pair<bool, bool> cons) const {
+    const AbstractState &v2, int var, const pair<bool, bool> cons,
+    utils::LogProxy &log) const {
     /* State v has been split into v1 and v2. Now for all transitions
        v->w we need to add transitions v1->w, v2->w, or both. */
+
+    if (log.is_at_least_debug()) {
+        log << "--- Rewire Outgoing Transitions ---" << endl;
+    }
+
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
 
@@ -207,7 +232,7 @@ void TransitionRewirer::rewire_outgoing_transitions(
         int pre = get_precondition_value(op_id, var);
         int post = get_postcondition_value(op_id, var);
         
-        bool derived = vars[var].is_derived(); // check if var is derived
+        bool derived = vars[var].is_derived() || !get_var_dependencies(var).second.empty(); // check if var is derived
         // check if v1 or v2 have an inapplicability conflict with a derived precondition variable
         bool pre_derived_conflict_v1 = precondition_derived_conflict(v1.get_cartesian_set(), op_id, var);
         bool pre_derived_conflict_v2 = precondition_derived_conflict(v2.get_cartesian_set(), op_id, var);
@@ -219,6 +244,17 @@ void TransitionRewirer::rewire_outgoing_transitions(
         bool derived_conflict_v2 = pre_derived_conflict_v2 || !cons.second ||
             conflict_derived_domains(
                 v2.get_cartesian_set(), op_id, w.get_cartesian_set(), var);
+
+        if (log.is_at_least_debug()) {
+            log << " via operator " << op_id << " -> " << w_id
+            << " : " << w.get_cartesian_set()
+            << "pre=" << pre << " post=" << post
+            << " derived=" << derived
+            << " conflict_v1 (pre)=" << pre_derived_conflict_v1
+            << " conflict_v2 (pre)=" << pre_derived_conflict_v2
+            << " conflict_v1=" << derived_conflict_v1
+            << " conflict_v2" << derived_conflict_v2 << endl;
+        }
 
         if (!derived && post == UNDEFINED) {
             assert(pre == UNDEFINED);
@@ -261,13 +297,18 @@ void TransitionRewirer::rewire_outgoing_transitions(
             verify_rewiring_outgoing(
                 w, v1, v2, op_id, added_v1_w, added_v2_w, cons, var);
         }
+        if (log.is_at_least_debug()) {
+            if (added_v1_w) log << "Added v1 -> w" << endl;
+            if (added_v2_w) log << "Added v2 -> w" << endl;
+        }
     }
 }
 
 void TransitionRewirer::rewire_loops(
     deque<Loops> &loops, deque<Transitions> &incoming,
     deque<Transitions> &outgoing, int v_id, const AbstractState &v1,
-    const AbstractState &v2, int var, const pair<bool, bool> cons) const {
+    const AbstractState &v2, int var, const pair<bool, bool> cons,
+    utils::LogProxy &log) const {
 
     Loops old_loops = move(loops[v_id]);
     assert(loops[v_id].empty());
@@ -275,6 +316,11 @@ void TransitionRewirer::rewire_loops(
     /* State v has been split into v1 and v2. Now for all self-loops
        v->v we need to add one or two of the transitions v1->v1, v1->v2,
        v2->v1 and v2->v2. */
+
+    if (log.is_at_least_debug()) {
+        log << "--- Rewire Loops ---" << endl;
+    }
+
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
     for (int op_id : old_loops) {
@@ -291,6 +337,16 @@ void TransitionRewirer::rewire_loops(
         bool derived_conflict_v2 = false || !cons.second;
         bool derived_conflict_v1_to_v2 = false || !cons.first || !cons.second;
         bool derived_conflict_v2_to_v1 = false || !cons.second || !cons.first;
+
+        if (log.is_at_least_debug()) {
+            log << "  loop op=" << op_id
+                << " pre=" << pre << " post=" << post
+                << " derived=" << derived
+                << " conflict_v1=" << derived_conflict_v1
+                << " conflict_v2=" << derived_conflict_v2
+                << " conflict_v1->v2=" << derived_conflict_v1_to_v2
+                << " conflict_v2->v1=" << derived_conflict_v2_to_v1 << endl;
+        }
 
         if (derived) {
             // derived value is the same for both v1 and v2 
@@ -458,6 +514,12 @@ void TransitionRewirer::rewire_loops(
                 v1, v2, op_id, added_loop_v1, added_loop_v2, added_v1_v2,
                 added_v2_v1, cons, var);
         }
+        if (log.is_at_least_debug()) {
+            if (added_loop_v1) log << "Added loop v1" << endl;
+            if (added_loop_v2) log << "Added loop v2" << endl;
+            if (added_v1_v2) log << "Added v1 -> v2" << endl;
+            if (added_v2_v1) log << "Added v2 -> v1" << endl;
+        }
     }
 }
 
@@ -506,7 +568,7 @@ bool TransitionRewirer::conflict_derived_domains(
             return true;
         }
     }
-    for (int var : get_var_dependencies(var_id).second) {
+    for (int var : variable_dependencies->get_transitive_dependents(var_id)) {
         // iterate over all variables appearing in the head of an axiom with var_id in the body
         // check conflict for all these variables affected by the split
         if (vars[var].is_derived() && !extended_a_o.intersects(b, var)) {
@@ -535,7 +597,7 @@ bool TransitionRewirer::precondition_derived_conflict(
     // check if operator has derived preconditions and if the derived variables
     // in these preconditions depend on the split variable
     bool has_derived_pre = false;
-    vector<int> aff_vars = get_var_dependencies(var_id).second;
+    vector<int> aff_vars = variable_dependencies->get_transitive_dependents(var_id);
     vector<FactPair> der_pre;
     for (const FactPair &pre : preconditions_by_operator[op_id]) {
         if (vars[pre.var].is_derived() && find(aff_vars.begin(), aff_vars.end(), pre.var) != aff_vars.end()) {
@@ -577,7 +639,7 @@ std::pair<bool, bool> TransitionRewirer::consistency_check(
     // b) has derived variables depending on it.
     // We assume that previously discovered inconsistent states get disconnected
     // from the transition systems and are never split themselves.
-    bool derived_dep = vars[var].is_derived() || !get_var_dependencies(var).second.empty();
+    bool derived_dep = vars[var].is_derived() || !variable_dependencies->get_transitive_dependents(var).empty();
     if (!task_has_axioms || !derived_dep) {
         return make_pair(true, true);
     }

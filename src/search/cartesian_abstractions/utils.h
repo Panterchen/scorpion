@@ -29,6 +29,13 @@ struct AxiomRule {
     std::vector<FactPair> body;       // Axiom Body
 };
 
+struct AxiomSplitTarget {
+    FactPair fact;
+    bool force;  // if true: fact should be forced in the split, else prevented
+
+    auto operator<=>(const AxiomSplitTarget &) const = default;
+};
+
 class Abstraction;
 
 class VariableDependencies {
@@ -42,10 +49,18 @@ class VariableDependencies {
 
     // lazy cache for transitive closure of basic variable dependencies per var
     mutable std::vector<std::optional<std::vector<int>>> basic_deps_cache;
+    mutable std::vector<std::vector<std::vector<std::optional<std::vector<AxiomSplitTarget>>>>> basic_targets_cache;
+    mutable std::vector<std::optional<std::vector<int>>> transitive_dependents_cache;
 
     VariablesProxy vars;
 
     void resolve_basic_dependencies(
+        int var_id, std::vector<int> &result, std::vector<bool> &visited) const;
+    void resolve_basic_targets(
+        int var_id, int value, bool force,
+        std::vector<AxiomSplitTarget> &result,
+        std::vector<std::vector<std::vector<bool>>> &visited) const;
+    void resolve_transitive_dependents(
         int var_id, std::vector<int> &result, std::vector<bool> &visited) const;
 
     public:
@@ -56,6 +71,10 @@ class VariableDependencies {
         const std::vector<AxiomRule> &get_rules(int var_id, int value) const;
 
         const std::vector<int> &get_basic_dependencies(int var_id) const;
+
+        const std::vector<AxiomSplitTarget> &get_basic_targets(int var_id, int value, bool force) const;
+
+        const std::vector<int> &get_transitive_dependents(int var_id) const;
 };
 
 extern bool g_hacked_sort_transitions;

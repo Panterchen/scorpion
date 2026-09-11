@@ -213,10 +213,15 @@ pair<int, int> Abstraction::refine(
     }
 
     // Ensure that the initial state always has state ID 0.
-    if (v1_id == init_id &&
-        v2_cartesian_set.test(var, concrete_initial_state[var].get_value())) {
+    bool init_in_v2 = v2_cartesian_set.test(var, concrete_initial_state[var].get_value());
+    if ((v1_id == init_id && init_in_v2) ||
+        (v2_id == init_id && !init_in_v2)) {
         swap(v1_id, v2_id);
-    }
+        }
+    //if (v1_id == init_id &&
+    //    v2_cartesian_set.test(var, concrete_initial_state[var].get_value())) {
+    //    swap(v1_id, v2_id);
+    //}
 
     // Update refinement hierarchy.
     assert(refinement_hierarchy);

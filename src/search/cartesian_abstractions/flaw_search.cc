@@ -2,23 +2,25 @@
 
 #include "abstract_state.h"
 #include "abstraction.h"
+#include "extension_strategy.h"
 #include "flaw.h"
+#include "regression_strategy.h"
 #include "shortest_paths.h"
 #include "split_selector.h"
-#include "regression_strategy.h"
-#include "extension_strategy.h"
 #include "transition_system.h"
 #include "utils.h"
-#include "../state_registry.h"
 
+#include "../state_registry.h"
+#include "../task_proxy.h"
 
 #include "../plugins/plugin.h"
 #include "../task_utils/successor_generator.h"
 #include "../task_utils/task_properties.h"
-#include "../task_proxy.h"
 #include "../utils/countdown_timer.h"
 #include "../utils/memory.h"
 #include "../utils/rng.h"
+
+#include <bits/locale_facets_nonio.h>
 
 using namespace std;
 
@@ -196,8 +198,8 @@ static void add_split(vector<vector<Split>> &splits, Split &&new_split) {
 }
 
 static vector<int> get_unaffected_variables(
-    const OperatorProxy &op, int num_variables) {
-    vector<bool> affected(num_variables);
+    const OperatorProxy &op, VariablesProxy vars) {
+    vector<bool> affected(vars.size(), false);
     for (EffectProxy effect : op.get_effects()) {
         FactPair fact = effect.get_fact().get_pair();
         affected[fact.var] = true;
@@ -207,31 +209,120 @@ static vector<int> get_unaffected_variables(
         affected[fact.var] = true;
     }
     vector<int> unaffected_vars;
-    unaffected_vars.reserve(num_variables);
-    for (int var = 0; var < num_variables; ++var) {
-        if (!affected[var]) {
+    unaffected_vars.reserve(vars.size());
+    for (size_t var = 0; var < vars.size(); ++var) {
+        if (!affected[var] && !vars[var].is_derived()) {
             unaffected_vars.push_back(var);
         }
     }
     return unaffected_vars;
 }
 
-struct FactPairHash {
-    size_t operator()(FactPair fact) const {
-        utils::HashState hash_state;
-        hash_state.feed(fact.var);
-        hash_state.feed(fact.value);
-        return hash_state.get_hash64();
+bool FlawSearch::add_candidates_for_basic_targets(
+    const std::vector<AxiomSplitTarget> &targets, int count,
+    const AbstractState &abs_state, std::vector<std::vector<Split>> &splits,
+    const AbstractState &target_abs_state) const {
+    /* If a split cannot be found on a derived variable, we try to split on
+     * a basic variable it depends on.
+     * targets contains the list of basic variable facts that trigger the
+     * relevant derived variable value
+     * force is true, if we want to split s.t. we force the triggering of
+     * the axiom after the split
+     * force is false, if we want to split s.t. the axiom does not trigger
+     * after the split
+     */
+    bool found_split = false;
+    for (const AxiomSplitTarget &target : targets) {
+        int bv = target.fact.var;
+        if (log.is_at_least_debug()) {
+            log << "  candidate target: var=" << bv << " value=" << target.fact.value
+         << " abs_state.contains=" << abs_state.contains(bv, target.fact.value)
+         << " count(bv)=" << abs_state.get_cartesian_set().count(bv) << endl;
+        }
+        if (!abs_state.contains(bv, target.fact.value)) {
+            // we cannot split on the target pair, if the abstract state
+            // does not contain it.
+            continue;
+        }
+        if (target.force) {
+            int other = -1;
+            bool used_target_aligned = false;
+            for (int val = 0; val < domain_sizes[bv]; ++val) {
+                // Try finding a value allowed in both abs and target_abs
+                if (val != target.fact.value && abs_state.contains(bv, val)
+                    && target_abs_state.contains(bv, val)) {
+                    // we terminate as soon as we find any value other than the
+                    // target in abs_state and target_abs_state (split possible)
+                    other = val;
+                    used_target_aligned = true;
+                    break;
+                    }
+            }
+            if (other == -1) {
+                for (int val = 0; val < domain_sizes[bv]; ++val) {
+                    // Fallback: any target independent value
+                    if (val != target.fact.value && abs_state.contains(bv, val)) {
+                        // we terminate as soon as we find any value other than the
+                        // target in abs_state (split possible)
+                        other = val;
+                        break;
+                    }
+                }
+            }
+            if (other == -1) continue;
+            if (log.is_at_least_debug()) {
+                log << "  force-split bv=" << bv << " other=" << other
+                    << " target_aligned=" << used_target_aligned << endl;
+            }
+            add_split(splits, Split(abs_state.get_id(), bv, other,
+                {target.fact.value}, count));
+        } else {
+            vector<int> wanted;
+            bool used_target_aligned = false;
+            for (int val = 0; val < domain_sizes[bv]; ++val) {
+                if (val != target.fact.value && abs_state.contains(bv, val)
+                    && target_abs_state.contains(bv, val)) {
+                    used_target_aligned = true;
+                    wanted.push_back(val);
+                    }
+            }
+            if (wanted.empty()) {
+                for (int val = 0; val < domain_sizes[bv]; ++val) {
+                    if (val != target.fact.value && abs_state.contains(bv, val)) {
+                        wanted.push_back(val);
+                    }
+                }
+            }
+            if (wanted.empty()) continue;
+            if (log.is_at_least_debug()) {
+                log << "  force-split bv=" << bv << " wanted=" << wanted
+                    << " target_aligned=" << used_target_aligned << endl;
+            }
+            add_split(splits, Split(abs_state.get_id(), bv, target.fact.value,
+                move(wanted), count));
+        }
+        found_split = true;
     }
-};
+    return found_split;
+}
 
-using CompactFactMap = phmap::flat_hash_map<FactPair, int, FactPairHash>;
+void FlawSearch::add_axiom_fallback_candidates(
+    const AbstractState &abs_state, const AbstractState &target_abs_state,
+    int var, int bad_value, int count,
+    std::vector<std::vector<Split>> &splits) const {
+    if (log.is_at_least_debug()) {
+        log << "try splitting on basic targets for pair " << var << "=" << bad_value << endl;
+    }
+    bool found_split = add_candidates_for_basic_targets(
+        variable_dependencies->get_basic_targets(var, bad_value, false), count,
+        abs_state, splits, target_abs_state);
+    if (log.is_at_least_debug()) log << "split successful ? " << found_split << endl;
+}
 
-static void get_deviation_splits(
+void FlawSearch::get_deviation_splits(
     const AbstractState &abs_state, const CompactFactMap &fact_count,
-    const AbstractState &target_abs_state, const vector<int> &domain_sizes,
-    vector<vector<Split>> &splits, TaskProxy task, int op_id,
-    RegressionStrategyInstance &regression_strategy_instance) {
+    const AbstractState &target_abs_state, int op_id,
+    vector<vector<Split>> &splits) const {
     /*
       For each fact in the concrete state that is not contained in the
       target abstract state, loop over all values in the domain of the
@@ -257,67 +348,49 @@ static void get_deviation_splits(
     for (auto &[fact, count] : fact_count) {
         assert(count > 0);
         int var = fact.var;
-        if (!target_abs_state.contains(var, fact.value)) {
-            if (!task.get_variables()[var].is_derived()) { // non-derived case
-                // Note: we could precompute the "wanted" vector, but not the split.
-                vector<int> wanted;
-                for (int value = 0; value < domain_sizes[var]; ++value) {
-                    if (abs_state.contains(var, value) &&
-                        target_abs_state.contains(var, value)) {
+        if (target_abs_state.contains(var, fact.value)) {
+            continue;
+        }
+        // Case A: variable is not derived
+        if (!task_proxy.get_variables()[var].is_derived()) {
+            // Note: we could precompute the "wanted" vector, but not the split.
+            vector<int> wanted;
+            for (int value = 0; value < domain_sizes[var]; ++value) {
+                if (abs_state.contains(var, value) &&
+                    target_abs_state.contains(var, value)) {
                         wanted.push_back(value);
-                        }
-                }
-                assert(!wanted.empty());
-                add_split(
-                    splits,
-                    Split(
-                        abs_state.get_id(), var, fact.value, move(wanted), count));
-            } else { // derived variable
-                bool found_split_on_var = false;
-                if (abs_state.get_cartesian_set().count(var) > 1) {
-                    vector<int> wanted = regression_strategy_instance.get_wanted_values(abs_state, target_abs_state, var, op_id);
-                    if (wanted.empty()) {
-                        /* With composed regression, the extended regression of t under op can
-                         * determine a derived variable value that is incompatible with a[v],
-                         * giving an empty intersection. This means a cannot reach t via op
-                         * for this derived variable — skip this split candidate.
-                         * (With naive regression this cannot happen since wanted = a[v].)
-                         * It should never happen for basic variables.
-                         */
-                        OperatorProxy op_proxy = task.get_operators()[op_id];
-                        std::cout << "Operator ID: " << op_id << " Name: " << op_proxy.get_name() << "\n    Preconditions: " << std::endl;
-                        for (auto pre : op_proxy.get_preconditions()) {
-                            std::cout << "        Variable: " << pre.get_var_id() << ", Value: " << pre.get_value() << std::endl;
-                        }
-                        std::cout << "    Effects:" << std::endl;
-                        for (auto eff : op_proxy.get_effects()) {
-                            std::cout << "        Variable: " << eff.get_fact().get_var_id() << ", Value: " << eff.get_fact().get_value() << std::endl;
-                        }
-                        assert(task.get_variables()[var].is_derived());
-                        continue;
                     }
-                    assert(!wanted.empty());
-                    /* For derived variables, it can happen that the wanted vector is not
-                     * empty, but that it contains a single value and that this is the
-                     * only value in the abstract state 'a' we want to split. So we skip
-                     * derived variables with non-empty wanted vectors where |a[v]| = 1
-                    */
-                    if (wanted.size() < static_cast<size_t>(abs_state.get_cartesian_set().count(var))) {
-                        // remove degenerate splits on derived variables
-                        add_split(splits, Split(abs_state.get_id(), var, fact.value,
-                                                move(wanted), count));
-                        found_split_on_var = true;
-                    }
-                }
-                if (!found_split_on_var) {
-                    // TODO: calculate split on basic variables that var depends on
-                    // TODO: pass in the variable dependencies for var
-                    VariableDependencies variable_dependencies(task);
-                    vector<AxiomRule> rules = variable_dependencies.get_rules(var, fact.value);
-                    vector<int> dep_vars;
-
-                }
             }
+            assert(!wanted.empty());
+            add_split(
+                splits,
+                Split(abs_state.get_id(), var, fact.value, move(wanted), count));
+            continue;
+        }
+        // Case B: variable is derived
+        bool found_split_on_var = false;
+        if (log.is_at_least_debug()) {
+            log << "direct split attempt on derived var=" << var << endl;
+            log << "var domain size in abs_state: " << abs_state.get_cartesian_set().count(var);
+            log << ", wanted="
+                << regression_strategy_instance->get_wanted_values(abs_state, target_abs_state, var, op_id) << endl;
+        }
+        if (abs_state.get_cartesian_set().count(var) > 1) {
+            // we ignore variables with |a[var]| = 1 -> unsplittable
+            vector<int> wanted = regression_strategy_instance->get_wanted_values(abs_state, target_abs_state, var, op_id);
+            if (!wanted.empty() && wanted.size() < static_cast<size_t>(abs_state.get_cartesian_set().count(var))) {
+                /* We can only split on a derived variable if the wanted vector
+                 * is non-empty and if the wanted vector is strictly smaller
+                 * than the current variable domain in a */
+                add_split(splits, Split(abs_state.get_id(), var, fact.value,
+                                        move(wanted), count));
+                found_split_on_var = true;
+            }
+        }
+        if (!found_split_on_var) {
+            if (log.is_at_least_debug()) log << "direct split unsuccessful, attempt fallback onto base variables" << endl;
+            add_axiom_fallback_candidates(
+                abs_state, target_abs_state, var, fact.value, count, splits);
         }
     }
 }
@@ -341,6 +414,15 @@ unique_ptr<Split> FlawSearch::create_split(
         int op_id = pair.first;
         const vector<int> &targets = pair.second;
         OperatorProxy op = task_proxy.get_operators()[op_id];
+
+        if (log.is_at_least_debug()) {
+            log << "TransitionSystem raw outgoing from #" << abstract_state_id << " via op " << op_id << ": ";
+            for (const Transition &t : abstraction.get_outgoing_transitions(abstract_state_id)) {
+                log << "-> " << t.target_id << ", ";
+            }
+            log << endl;
+            log << "op_id=" << op_id << " #targets=" << targets.size() << " targets=" << targets << endl;
+        }
 
         vector<State> states;
         states.reserve(state_ids.size());
@@ -375,7 +457,7 @@ unique_ptr<Split> FlawSearch::create_split(
 
         int num_vars = domain_sizes.size();
         vector<int> unaffected_variables =
-            get_unaffected_variables(op, num_vars);
+            get_unaffected_variables(op, task_proxy.get_variables());
 
         phmap::flat_hash_map<int, CompactFactMap> fact_count_by_target;
         for (size_t i = 0; i < states.size(); ++i) {
@@ -385,6 +467,7 @@ unique_ptr<Split> FlawSearch::create_split(
             const State &state = states[i];
             assert(task_properties::is_applicable(op, state));
             State succ_state = state_registry->get_successor_state(state, op);
+
             bool target_hit = false;
             for (int target : targets) {
                 if (!utils::extra_memory_padding_is_reserved()) {
@@ -399,6 +482,14 @@ unique_ptr<Split> FlawSearch::create_split(
                     target_hit = true;
                 } else {
                     // Deviation flaw
+                    if (log.is_at_least_debug()) {
+                        log << "try to resolve deviation flaw for successor state :"
+                        << succ_state.get_id() << " : ";
+                        for (int var = 0; var < num_vars; ++var) {
+                            log << "<" << var << "=" << succ_state[var].get_value() << ">, ";
+                        }
+                        log << endl;
+                    }
                     assert(target != get_abstract_state_id(succ_state));
                     auto pos = fact_count_by_target.find(target);
                     if (pos == fact_count_by_target.end()) {
@@ -410,17 +501,40 @@ unique_ptr<Split> FlawSearch::create_split(
                         int state_value = state[var].get_value();
                         ++fact_count[FactPair(var, state_value)];
                     }
+                    // NEU: derived Variablen separat aus succ_state erfassen
+                    for (VariableProxy var : task_proxy.get_variables()) {
+                        if (var.is_derived()) {
+                            ++fact_count[FactPair(var.get_id(), succ_state[var.get_id()].get_value())];
+                        }
+                    }
                 }
             }
         }
 
         for (const auto &[target, fact_count] : fact_count_by_target) {
+            if (log.is_at_least_debug()) {
+                log << "--- start deviation splitting ---" << endl;
+                // For Debugging: print out info about the operator, and the abstract states involved
+                log << "Abstract State : " << abstract_state.get_cartesian_set() << endl;
+                log << "operator " << op_id << " with preconditions {" ;
+                for (auto pre : task_proxy.get_operators()[op_id].get_preconditions()) {
+                    log << "<" << pre.get_var_id() << "=" << pre.get_value() << ">, ";
+                }
+                log << "}, effects {";
+                for (auto eff : task_proxy.get_operators()[op_id].get_effects()) {
+                    log << "<" << eff.get_fact().get_var_id() << "=" << eff.get_fact().get_value() << ">, ";
+                }
+                log << "}" << endl;
+                log << "Abstract target state : " << abstraction.get_state(target).get_cartesian_set() << endl;
+
+            }
             regression_strategy_instance->prepare(
                 abstraction.get_state(target).get_cartesian_set(), op_id);
+
             get_deviation_splits(
                 abstract_state, fact_count, abstraction.get_state(target),
-                domain_sizes, splits, task_proxy,
-                op_id, *regression_strategy_instance);
+                op_id, splits);
+            if (log.is_at_least_debug()) log << "--- finished deviation splitting ---" << endl;
         }
     }
 
@@ -434,7 +548,6 @@ unique_ptr<Split> FlawSearch::create_split(
     compute_splits_timer.stop();
 
     if (num_splits == 0) {
-        
         return  nullptr;
     }
 
@@ -508,8 +621,10 @@ unique_ptr<Split> FlawSearch::get_single_split(
     const utils::CountdownTimer &cegar_timer) {
     auto search_status = search_for_flaws(cegar_timer);
 
-    if (search_status == TIMEOUT)
+    if (search_status == TIMEOUT) {
+        last_stop_reason = StopReason::TIMEOUT;
         return nullptr;
+    }
 
     if (search_status == FAILED) {
         assert(!flawed_states.empty());
@@ -532,9 +647,16 @@ unique_ptr<Split> FlawSearch::get_single_split(
             log << "Path (without last operator): " << operator_names << endl;
         }
 
-        return create_split({state_id}, flawed_state.abs_id);
+        unique_ptr<Split> split = create_split({state_id}, flawed_state.abs_id);
+        if (split) {
+            consecutive_rescue_splits = 0;
+            return split;
+        }
+        last_stop_reason = StopReason::REFINEMENT_STALLED;
+        return nullptr;
     }
     assert(search_status == SOLVED);
+    last_stop_reason = StopReason::SOLVED;
     return nullptr;
 }
 
@@ -579,138 +701,48 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             }
         }
     }
-
-    /*
-    // TODO: remove this part if the alternate solution below performs stable
-    if (task_properties::has_axioms(task_proxy)) {
-        // Tracks abstract states for which create_split returned nullptr in
-        // this round (i.e. no valid split could be found despite a flaw existing).
-        // This happens with axioms when all split candidates are derived variables
-        // whose wanted vectors are degenerate, i.e. the wanted vector equals the
-        // current variable domain of the abstract state (naive regression).
-        // For tasks without derived variables, this set always stays empty.
-        // The set is reset after each call to search_for_flaws since the
-        // flawed_states collection is freshly populated at that point.
-        std::unordered_set<int> unsplittable_abstract_states;
-
-        while (true) {
-            // Try to get the next flawed abstract state with minimum h-value
-            // from the current collection without running a new flaw search.
-            FlawedState flawed_state = get_flawed_state_with_min_h();
-
-            if (flawed_state == FlawedState::no_state) {
-                // If we exhausted flawed_states and already encountered
-                // unsplittable states this round, running search_for_flaws again
-                // would find the same flaws since nothing has been refined —
-                // this would cause an infinite loop. Return nullptr and let
-                // the caller trigger a new refinement cycle.
-                if (!unsplittable_abstract_states.empty()) {
-                    last_refined_flawed_state = FlawedState::no_state;
-                    return nullptr;
-                }
-
-                // flawed_states is empty and no unsplittable states were seen
-                // this round — run a fresh flaw search to find new flaws.
-                if (log.is_at_least_debug()) {
-                    log << "No flawed state with min h found, search for flaws again." << endl;
-                }
-                SearchStatus search_status = search_for_flaws(cegar_timer);
-
-                if (search_status == SearchStatus::TIMEOUT)
-                    return nullptr;
-
-                if (search_status == SearchStatus::SOLVED)
-                    return nullptr;
-
-                // Flaw search found flaws (FAILED status). Clear the unsplittable
-                // set since we are starting a new round with a freshly populated
-                // flawed_states — previously unsplittable states may now be
-                // splittable after refinements elsewhere.
-                unsplittable_abstract_states.clear();
-
-                // Try to get a flawed state from the freshly populated set.
-                // Can still return no_state if all found states have stale
-                // h-values (get_flawed_state_with_min_h discards states whose
-                // h-value has increased). Return nullptr and let the caller
-                // handle the next cycle.
-                flawed_state = get_flawed_state_with_min_h();
-                if (flawed_state == FlawedState::no_state)
-                    return nullptr;
-            }
-
-            // Skip abstract states that already failed to produce a split in
-            // this round — they will not improve without a refinement step.
-            // Re-pop from flawed_states by continuing the loop.
-            if (unsplittable_abstract_states.count(flawed_state.abs_id)) {
-                continue;
-            }
-
-            if (log.is_at_least_debug()) {
-                log << "Use flawed state: " << flawed_state << endl;
-            }
-
-            unique_ptr<Split> split =
-                create_split(flawed_state.concrete_states, flawed_state.abs_id);
-
-            if (!utils::extra_memory_padding_is_reserved()) {
-                return nullptr;
-            }
-
-            if (split) {
-                // Valid split found — store the refined state for recycling
-                // on the next call and return the split to the caller.
-                last_refined_flawed_state = move(flawed_state);
-                return split;
-            } else {
-                // create_split returned nullptr — no valid split could be found
-                // for this abstract state despite a flaw existing. Mark it as
-                // unsplittable for this round and try the next flawed state.
-                unsplittable_abstract_states.insert(flawed_state.abs_id);
-                last_refined_flawed_state = FlawedState::no_state;
-            }
-        }
-    } else {
-        FlawedState flawed_state = get_flawed_state_with_min_h();
-        SearchStatus search_status = SearchStatus::FAILED;
-        if (flawed_state == FlawedState::no_state) {
-            search_status = search_for_flaws(cegar_timer);
-            if (search_status == SearchStatus::FAILED) {
-                flawed_state = get_flawed_state_with_min_h();
-            }
-        }
-
-        if (search_status == SearchStatus::TIMEOUT)
-            return nullptr;
-
+    /* Original flaw search
+    FlawedState flawed_state = get_flawed_state_with_min_h();
+    SearchStatus search_status = SearchStatus::FAILED;
+    if (flawed_state == FlawedState::no_state) {
+        search_status = search_for_flaws(cegar_timer);
         if (search_status == SearchStatus::FAILED) {
-            // There are flaws to refine.
-            assert(flawed_state != FlawedState::no_state);
+            flawed_state = get_flawed_state_with_min_h();
+        }
+    }
 
-            if (log.is_at_least_debug()) {
-                log << "Use flawed state: " << flawed_state << endl;
-            }
+    if (search_status == SearchStatus::TIMEOUT)
+        return nullptr;
 
-            unique_ptr<Split> split;
-            split = create_split(flawed_state.concrete_states, flawed_state.abs_id);
+    if (search_status == SearchStatus::FAILED) {
+        // There are flaws to refine.
+        assert(flawed_state != FlawedState::no_state);
 
-            if (!utils::extra_memory_padding_is_reserved()) {
-                return nullptr;
-            }
-
-            if (split) {
-                last_refined_flawed_state = move(flawed_state);
-            } else {
-                last_refined_flawed_state = FlawedState::no_state;
-                // We selected an abstract state without any flaws, so we try again.
-                return get_min_h_batch_split(cegar_timer);
-            }
-
-            return split;
+        if (log.is_at_least_debug()) {
+            log << "Use flawed state: " << flawed_state << endl;
         }
 
-        assert(search_status == SearchStatus::SOLVED);
-        return nullptr;
-    } */
+        unique_ptr<Split> split;
+        split = create_split(flawed_state.concrete_states, flawed_state.abs_id);
+
+        if (!utils::extra_memory_padding_is_reserved()) {
+            return nullptr;
+        }
+
+        if (split) {
+            last_refined_flawed_state = move(flawed_state);
+        } else {
+            last_refined_flawed_state = FlawedState::no_state;
+            // We selected an abstract state without any flaws, so we try again.
+            return get_min_h_batch_split(cegar_timer);
+        }
+
+        return split;
+    }
+
+    assert(search_status == SearchStatus::SOLVED);
+    return nullptr;
+    */
     // TODO: test this implementation
     // Tracks abstract states for which create_split returned nullptr in
     // this round (i.e. no valid split could be found despite a flaw existing).
@@ -732,11 +764,15 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             }
             SearchStatus search_status = search_for_flaws(cegar_timer);
 
-            if (search_status == SearchStatus::TIMEOUT)
+            if (search_status == SearchStatus::TIMEOUT) {
+                last_stop_reason = StopReason::TIMEOUT;
                 return nullptr;
+            }
 
-            if (search_status == SearchStatus::SOLVED)
+            if (search_status == SearchStatus::SOLVED) {
+                last_stop_reason = StopReason::SOLVED;
                 return nullptr;
+            }
 
             // FAILED: search added new flaws. But those new flaws might
             // themselves all belong to abstract states we already know are
@@ -747,7 +783,12 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
                 // A fresh search found nothing beyond already-known-unsplittable
                 // states — no further progress possible this round, stop.
                 last_refined_flawed_state = FlawedState::no_state;
-                // std::cout<< "Kein valider Split für aktuelle FlawedStates gefunden"<<std::endl;
+                if (!unsplittable_abs_states.empty()) {
+                    // TODO: figure out where to go from here
+                    last_stop_reason = StopReason::REFINEMENT_STALLED;
+                    return nullptr;
+                }
+                last_stop_reason = StopReason::REFINEMENT_STALLED;
                 return nullptr;
             }
         }
@@ -755,11 +796,11 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             log << "Use flawed state: " << flawed_state << endl;
         }
 
-        // std::cout<< "Angekommen!!!"<<std::endl;
         unique_ptr<Split> split =
             create_split(flawed_state.concrete_states, flawed_state.abs_id);
 
         if (!utils::extra_memory_padding_is_reserved()) {
+            last_stop_reason = StopReason::MEMORY_LIMIT;
             return nullptr;
         }
 
@@ -767,25 +808,18 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             // Valid split found — store the refined state for recycling
             // on the next call and return the split to the caller.
             last_refined_flawed_state = move(flawed_state);
-            // std::cout << "Split berechnet!!!" << std::endl;
+            consecutive_rescue_splits = 0;
             return split;
         } else {
             // create_split returned nullptr — no valid split could be
             // found for this abstract state despite a flaw existing. Mark
             // it as unsplittable for this round and try the next flawed
             // state (looping back to the top).
-            // TODO: hier nicht in die unsplittable states packen, sondern
-            // split anders berechnen... (Annahme aktuell: leerer wanted vector)
-            // -> problem liegt in derived variable..., statt auf derived var
-            // selbst zu splitten, auf einer der basic vars splitten von denen
-            // derived var abhängt
             unsplittable_abs_states.insert(flawed_state.abs_id);
             last_refined_flawed_state = FlawedState::no_state;
         }
     }
 }
-
-
 
 FlawSearch::FlawSearch(
     const shared_ptr<AbstractTask> &task, const Abstraction &abstraction,
@@ -827,6 +861,7 @@ FlawSearch::FlawSearch(
 unique_ptr<Split> FlawSearch::get_split(
     const utils::CountdownTimer &cegar_timer) {
     unique_ptr<Split> split;
+    last_stop_reason = StopReason::NONE;
 
     switch (pick_flawed_abstract_state) {
     case PickFlawedAbstractState::FIRST:

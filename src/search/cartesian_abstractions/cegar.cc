@@ -264,7 +264,27 @@ void CEGAR::refinement_loop() {
         }
 
         if (!split) {
-            log << "Found concrete solution." << endl;
+            // log << "Found concrete solution." << endl;
+            switch (flaw_search->get_last_stop_reason()) {
+            case StopReason::SOLVED:
+                log << "Found concrete solution." << endl;
+                break;
+            case StopReason::TIMEOUT:
+                log << "Reached time limit in flaw search." << endl;
+                break;
+            case StopReason::MEMORY_LIMIT:
+                log << "Reached memory limit in flaw search." << endl;
+                break;
+            case StopReason::REFINEMENT_STALLED:
+                log << "Refinement stalled: no further split found despite "
+                       "existing flaws (NOT a verified solution)." << endl;
+                // print out information about each state... ? for debugging...
+
+                break;
+            case StopReason::NONE:
+                log << "Flaw search returned no split for an unknown reason." << endl;
+                break;
+            }
             break;
         }
 
@@ -272,6 +292,14 @@ void CEGAR::refinement_loop() {
         int state_id = split->abstract_state_id;
         const AbstractState &abstract_state = abstraction->get_state(state_id);
         assert(!abstraction->get_goals().count(state_id));
+
+        cout << "REFINE: abs_id=" << split->abstract_state_id
+            << " var=" << split->var_id
+            << " value=" << split->value
+            << " values=" << split->values
+            << " count(var in abs)=" << abstraction->get_state(split->abstract_state_id).get_cartesian_set().count(split->var_id)
+            << " concrete_init[var]=" << task_proxy.get_initial_state()[split->var_id].get_value()
+            << endl;
 
         pair<int, int> new_state_ids =
             abstraction->refine(abstract_state, split->var_id, split->values);
