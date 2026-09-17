@@ -268,6 +268,32 @@ void CEGAR::refinement_loop() {
             switch (flaw_search->get_last_stop_reason()) {
             case StopReason::SOLVED:
                 log << "Found concrete solution." << endl;
+                if (log.is_at_least_debug()) {
+                    for (OperatorProxy op : task_proxy.get_operators()) {
+                        log << op.get_id() << "(pre : {";
+                        for (FactProxy p : op.get_preconditions()) {
+                            log << p.get_var_id() << "=" << p.get_value() << ", ";
+                        }
+                        log << "}, eff : {";
+                        for (EffectProxy p : op.get_effects()) {
+                            log << p.get_fact().get_var_id() << "=" << p.get_fact().get_value() << ", ";
+                        }
+                        log << "})" << endl;
+                    }
+                    for (int abs_id = 0; abs_id < abstraction->get_num_states(); ++abs_id) {
+                        log << "#" << abs_id << " : " << abstraction->get_state(abs_id).get_cartesian_set() << endl;
+                        if (abstraction->get_initial_state().get_id() == abs_id) log << "initial state" << endl;
+                        if (abstraction->get_goals().contains(abs_id)) log << "goal state" << endl;
+                        log << "Outgoing : " << endl;
+                        for (Transition t : abstraction->get_outgoing_transitions(abs_id)) {
+                            log << abs_id << "-" << t.op_id << "->" << t.target_id << endl;
+                        }
+                        log << "Incoming : " << endl;
+                        for (Transition t : abstraction->get_incoming_transitions(abs_id)) {
+                            log << t.target_id << "-" << t.op_id << "->" << abs_id <<  endl;
+                        }
+                    }
+                }
                 break;
             case StopReason::TIMEOUT:
                 log << "Reached time limit in flaw search." << endl;
@@ -279,6 +305,32 @@ void CEGAR::refinement_loop() {
                 log << "Refinement stalled: no further split found despite "
                        "existing flaws (NOT a verified solution)." << endl;
                 // print out information about each state... ? for debugging...
+                if (log.is_at_least_debug()) {
+                    for (OperatorProxy op : task_proxy.get_operators()) {
+                        log << op.get_id() << "(pre : {";
+                        for (FactProxy p : op.get_preconditions()) {
+                            log << p.get_var_id() << "=" << p.get_value() << ", ";
+                        }
+                        log << "}, eff : {";
+                        for (EffectProxy p : op.get_effects()) {
+                            log << p.get_fact().get_var_id() << "=" << p.get_fact().get_value() << ", ";
+                        }
+                        log << "})" << endl;
+                    }
+                    for (int abs_id = 0; abs_id < abstraction->get_num_states(); ++abs_id) {
+                        log << "#" << abs_id << " : " << abstraction->get_state(abs_id).get_cartesian_set() << endl;
+                        if (abstraction->get_initial_state().get_id() == abs_id) log << "initial state" << endl;
+                        if (abstraction->get_goals().contains(abs_id)) log << "goal state" << endl;
+                        log << "Outgoing : " << endl;
+                        for (Transition t : abstraction->get_outgoing_transitions(abs_id)) {
+                            log << abs_id << "-" << t.op_id << "->" << t.target_id << endl;
+                        }
+                        log << "Incoming : " << endl;
+                        for (Transition t : abstraction->get_incoming_transitions(abs_id)) {
+                            log << t.target_id << "-" << t.op_id << "->" << abs_id <<  endl;
+                        }
+                    }
+                }
 
                 break;
             case StopReason::NONE:

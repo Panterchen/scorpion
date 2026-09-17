@@ -232,7 +232,7 @@ void TransitionRewirer::rewire_outgoing_transitions(
         int pre = get_precondition_value(op_id, var);
         int post = get_postcondition_value(op_id, var);
         
-        bool derived = vars[var].is_derived() || !get_var_dependencies(var).second.empty(); // check if var is derived
+        bool derived = vars[var].is_derived(); // || !get_var_dependencies(var).second.empty(); // check if var is derived
         // check if v1 or v2 have an inapplicability conflict with a derived precondition variable
         bool pre_derived_conflict_v1 = precondition_derived_conflict(v1.get_cartesian_set(), op_id, var);
         bool pre_derived_conflict_v2 = precondition_derived_conflict(v2.get_cartesian_set(), op_id, var);
