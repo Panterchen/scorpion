@@ -115,7 +115,7 @@ void TransitionRewirer::rewire_incoming_transitions(
         bool added_u_v2 = false;
 
         int post = UNDEFINED;
-        bool derived = vars[var].is_derived() ; // check if var is derived // TODO: also if any derived variable depends on var... I think...
+        bool derived = vars[var].is_derived() ; // check if var is derived
 
         // TODO: evtl conflict_derived_domains umstrukturieren, damit
         // die teure extension von update(u, op_id) nur einmal berechnet werden muss
@@ -135,6 +135,7 @@ void TransitionRewirer::rewire_incoming_transitions(
         if (derived) {
             // determine derived variable value
             CartesianSet u_cs = update_cartesian_set(u.get_cartesian_set(), op_id);
+            u_cs = intersect_cartesian_sets_on_basics(u_cs, v1.get_cartesian_set()); // TODO: check if we need to adjust this to seperately check v1 & v2...
             post = extension_strategy_instance->get_extension_value(u_cs, var);
         } else{
             // determine basic variable post value
@@ -232,7 +233,7 @@ void TransitionRewirer::rewire_outgoing_transitions(
         int pre = get_precondition_value(op_id, var);
         int post = get_postcondition_value(op_id, var);
         
-        bool derived = vars[var].is_derived(); // || !get_var_dependencies(var).second.empty(); // check if var is derived
+        bool derived = vars[var].is_derived(); // check if var is derived
         // check if v1 or v2 have an inapplicability conflict with a derived precondition variable
         bool pre_derived_conflict_v1 = precondition_derived_conflict(v1.get_cartesian_set(), op_id, var);
         bool pre_derived_conflict_v2 = precondition_derived_conflict(v2.get_cartesian_set(), op_id, var);
@@ -353,6 +354,7 @@ void TransitionRewirer::rewire_loops(
             // computation of derived value only relies on basic variables,
             // however v1 and v2 only differ in var which is derived
             CartesianSet v1_cs = update_cartesian_set(v1.get_cartesian_set(), op_id);
+            v1_cs = intersect_cartesian_sets_on_basics(v1_cs, v2.get_cartesian_set()); // TODO: check if correct
             post = extension_strategy_instance->get_extension_value(v1_cs, var);
 
         } else {
@@ -549,6 +551,21 @@ CartesianSet TransitionRewirer::update_cartesian_set(const CartesianSet &a, int 
     return result;
 }
 
+CartesianSet TransitionRewirer::intersect_cartesian_sets_on_basics(const CartesianSet &a,
+    const CartesianSet &b) const {
+    CartesianSet result = a;
+    for (VariableProxy var : vars) {
+        if (!var.is_derived()) {
+            vector<int> values = a.get_intersection_values(b, var.get_id());
+            result.remove_all(var.get_id());
+            for (int val : values) {
+                result.add(var.get_id(), val);
+            }
+        }
+    }
+    return result;
+}
+
 bool TransitionRewirer::conflict_derived_domains(
     const CartesianSet &a, int op_id, const CartesianSet &b, int var_id) const {
     // TODO: can this be made more efficient, if we only consider variables that are affected by the split?
@@ -557,12 +574,13 @@ bool TransitionRewirer::conflict_derived_domains(
     if (!task_has_axioms) {
         return false;
     }
-    if (!vars[var_id].is_derived() && get_var_dependencies(var_id).second.empty()) {
-        return false;
-    }
+    // if (!vars[var_id].is_derived() && get_var_dependencies(var_id).second.empty()) {
+    //     return false;
+    // }
 
-    CartesianSet extended_a_o = extension_strategy_instance->get_extension(update_cartesian_set(a, op_id));
-    //CartesianSet extended_b = extension_strategy_instance->get_extension(b);
+    CartesianSet a_updated = update_cartesian_set(a, op_id);
+    a_updated = intersect_cartesian_sets_on_basics(a_updated, b); // TODO: double check if this works
+    CartesianSet extended_a_o = extension_strategy_instance->get_extension(a_updated);
     if (vars[var_id].is_derived()) {  // split variable is derived, check conflict for the variable
         if (!extended_a_o.intersects(b, var_id)) {
             return true;
@@ -575,11 +593,11 @@ bool TransitionRewirer::conflict_derived_domains(
             return true;
         }
     }
-    // for (VariableProxy var : vars){
-    //     if (var.is_derived() && !extended_a_o.intersects(b, var.get_id())) {
-    //         return true;
-    //     }
-    // }
+    for (VariableProxy var : vars){
+        if (var.is_derived() && !extended_a_o.intersects(b, var.get_id())) {
+            return true;
+        }
+    }
     return false;   
 }
 

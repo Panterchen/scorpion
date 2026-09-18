@@ -280,6 +280,17 @@ void CEGAR::refinement_loop() {
                         }
                         log << "})" << endl;
                     }
+                    for (OperatorProxy axiom : task_proxy.get_axioms()) {
+                        log << "Axiom #" << axiom.get_id();
+                        for (EffectProxy p : axiom.get_effects()) {
+                            log << "body : {";
+                            for (FactProxy ec : p.get_conditions()) {
+                                log << ec.get_var_id() << "=" << ec.get_value() << ", ";
+                            }
+                            log << "}, head : {" << p.get_fact().get_var_id() << "=" << p.get_fact().get_value() << "}" << endl;
+                        }
+                        log << "}" << endl;
+                    }
                     for (int abs_id = 0; abs_id < abstraction->get_num_states(); ++abs_id) {
                         log << "#" << abs_id << " : " << abstraction->get_state(abs_id).get_cartesian_set() << endl;
                         if (abstraction->get_initial_state().get_id() == abs_id) log << "initial state" << endl;
@@ -317,6 +328,17 @@ void CEGAR::refinement_loop() {
                         }
                         log << "})" << endl;
                     }
+                    for (OperatorProxy axiom : task_proxy.get_axioms()) {
+                        log << "Axiom #" << axiom.get_id();
+                        for (EffectProxy p : axiom.get_effects()) {
+                            log << "body : {";
+                            for (FactProxy ec : p.get_conditions()) {
+                                log << ec.get_var_id() << "=" << ec.get_value() << ", ";
+                            }
+                            log << "}, head : {" << p.get_fact().get_var_id() << "=" << p.get_fact().get_value() << "}";
+                        }
+                        log << endl;
+                    }
                     for (int abs_id = 0; abs_id < abstraction->get_num_states(); ++abs_id) {
                         log << "#" << abs_id << " : " << abstraction->get_state(abs_id).get_cartesian_set() << endl;
                         if (abstraction->get_initial_state().get_id() == abs_id) log << "initial state" << endl;
@@ -345,13 +367,13 @@ void CEGAR::refinement_loop() {
         const AbstractState &abstract_state = abstraction->get_state(state_id);
         assert(!abstraction->get_goals().count(state_id));
 
-        cout << "REFINE: abs_id=" << split->abstract_state_id
-            << " var=" << split->var_id
-            << " value=" << split->value
-            << " values=" << split->values
-            << " count(var in abs)=" << abstraction->get_state(split->abstract_state_id).get_cartesian_set().count(split->var_id)
-            << " concrete_init[var]=" << task_proxy.get_initial_state()[split->var_id].get_value()
-            << endl;
+        // cout << "REFINE: abs_id=" << split->abstract_state_id
+        //     << " var=" << split->var_id
+        //     << " value=" << split->value
+        //     << " values=" << split->values
+        //     << " count(var in abs)=" << abstraction->get_state(split->abstract_state_id).get_cartesian_set().count(split->var_id)
+        //     << " concrete_init[var]=" << task_proxy.get_initial_state()[split->var_id].get_value()
+        //     << endl;
 
         pair<int, int> new_state_ids =
             abstraction->refine(abstract_state, split->var_id, split->values);

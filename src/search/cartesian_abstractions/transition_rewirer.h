@@ -50,6 +50,8 @@ class TransitionRewirer {
         const AbstractState &v2, int var, std::pair<bool, bool> cons,
         utils::LogProxy &log) const;
     CartesianSet update_cartesian_set(const CartesianSet &a, int op_id) const;
+    CartesianSet intersect_cartesian_sets_on_basics(const CartesianSet &a,
+        const CartesianSet &b) const;
     bool conflict_derived_domains(
         const CartesianSet &a, int op_id, const CartesianSet &b,
         int var_id) const;

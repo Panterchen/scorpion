@@ -91,6 +91,19 @@ bool CartesianSet::intersects(const CartesianSet &other) const {
     return true;
 }
 
+vector<int> CartesianSet::get_intersection_values(
+    const CartesianSet &other,
+    int var) const {
+    const ConstBitsetView &this_view = get_view(var);
+    const ConstBitsetView &other_view = other.get_view(var);
+    vector<int> values;
+    for (int value = 0; value < this_view.size(); ++value) {
+        if (this_view.test(value) && other_view.test(value)) {
+            values.push_back(value);
+        }
+    } return values;
+}
+
 bool CartesianSet::is_superset_of(const CartesianSet &other) const {
     for (int var = 0; var < get_num_variables(); ++var) {
         bool is_subset = other.get_view(var).is_subset_of(get_view(var));

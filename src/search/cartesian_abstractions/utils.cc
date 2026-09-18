@@ -132,10 +132,10 @@ void VariableDependencies::resolve_basic_targets(
         for (const AxiomRule &rule : direct_rules) {
             for (const FactPair &cond : rule.body) {
                 if (!vars[cond.var].is_derived()) {
-                    cout << "  basic condition: var=" << cond.var << " value=" << cond.value << endl; // TODO: debug output remove later
+                    // cout << "  basic condition: var=" << cond.var << " value=" << cond.value << endl; // TODO: debug output remove later
                     result.push_back({cond, force});
                 } else {
-                    cout << "  derived condition: var=" << cond.var << " value=" << cond.value << endl; // TODO: debug output remove later
+                    // cout << "  derived condition: var=" << cond.var << " value=" << cond.value << endl; // TODO: debug output remove later
                     resolve_basic_targets(cond.var, cond.value, force, result, visited);
                 }
             }

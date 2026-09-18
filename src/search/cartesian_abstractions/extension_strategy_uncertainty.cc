@@ -57,7 +57,7 @@ CartesianSet ExtensionStrategyUncertaintyInstance::get_extension(
                             int derived_val = 1 - default_val;
                             result.remove(head_id, default_val); // remove default value (usually false) for derived variable as axiom fires (and makes it true usually)
                             if (result.count(head_id) == 0) {
-                                std::cout << "var " << head_id <<  "conflict!!" << a << "Unreachable: derived variable domain emptied" << std::endl;
+                                // std::cout << "var " << head_id <<  "conflict!!" << a << "Unreachable: derived variable domain emptied" << std::endl;
                                 return result; // conflict with extension, empty domain for derived variable
                             }
                             enqueue(fact_queue, seen_vars, FactPair(head_id, derived_val), true);
@@ -81,7 +81,7 @@ CartesianSet ExtensionStrategyUncertaintyInstance::get_extension(
                             int derived_val = 1 - default_val;
                             result.remove(head_id, derived_val); // remove true value for derived variable as no axiom can fire
                             if (result.count(head_id) == 0) {
-                                std::cout << "var " << head_id <<  "conflict!!" << a << "Unreachable: derived variable domain emptied" << std::endl;
+                                // std::cout << "var " << head_id <<  "conflict!!" << a << "Unreachable: derived variable domain emptied" << std::endl;
                                 return result; // conflict with extension, empty domain for derived variable
                             }
                             enqueue(fact_queue, seen_vars, FactPair(head_id, default_val), true);
@@ -154,6 +154,7 @@ int ExtensionStrategyUncertaintyInstance::get_extension_value(
                                 return variables[var].get_default_axiom_value(); // derived variable is its default value (usually false)
                             } 
                             enqueue(fact_queue, seen_vars, head_atom.get_pair(), false);
+
                         }
                         break; // assuming each fact only occurs once in an operator precondition
                     }
@@ -172,8 +173,9 @@ std::deque<std::pair<FactPair, bool>> ExtensionStrategyUncertaintyInstance::setu
     for (VariableProxy var_prox : variables) {
         // only iterate over basic variables, break as soon as the first derived variable is encountered
         // (assumes that the variables are ordered this way: first all basic, then all derived variables)
+        // This assumption is false.
         if (var_prox.is_derived()){
-            break;
+            continue;
         }
 
         int var_id = var_prox.get_id();
@@ -202,9 +204,13 @@ std::deque<std::pair<FactPair, bool>> ExtensionStrategyUncertaintyInstance::setu
 void ExtensionStrategyUncertaintyInstance::enqueue(
     std::deque<std::pair<FactPair, bool>> &q, std::vector<bool> &seen_vars,
     FactPair fact, bool x) {
-    if (!seen_vars[fact.var]){
+    if (!seen_vars[fact.var]) {
         seen_vars[fact.var] = true;
         q.emplace_back(fact, x);
+        if (variables[fact.var].is_derived()) {
+            // For derived variables, also emplace back the inverted Fact
+            q.emplace_back(FactPair(fact.var, 1-fact.value), !x);
+        }
     }
 }
 
