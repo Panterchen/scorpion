@@ -367,14 +367,6 @@ void CEGAR::refinement_loop() {
         const AbstractState &abstract_state = abstraction->get_state(state_id);
         assert(!abstraction->get_goals().count(state_id));
 
-        // cout << "REFINE: abs_id=" << split->abstract_state_id
-        //     << " var=" << split->var_id
-        //     << " value=" << split->value
-        //     << " values=" << split->values
-        //     << " count(var in abs)=" << abstraction->get_state(split->abstract_state_id).get_cartesian_set().count(split->var_id)
-        //     << " concrete_init[var]=" << task_proxy.get_initial_state()[split->var_id].get_value()
-        //     << endl;
-
         pair<int, int> new_state_ids =
             abstraction->refine(abstract_state, split->var_id, split->values);
         refine_timer.stop();

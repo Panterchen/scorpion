@@ -139,6 +139,11 @@ SearchStatus FlawSearch::step() {
             if (!found_flaw) {
                 add_flaw(abs_id, s);
                 found_flaw = true;
+                if (log.is_at_least_debug()) {
+                    log << "Applicability Flaw on abs state #" << abs_id <<
+                        " in s = " << s.get_id() << " with operator " <<
+                            op_id << endl;
+                }
             }
             if (pick_flawed_abstract_state == PickFlawedAbstractState::FIRST) {
                 return FAILED;
@@ -156,6 +161,13 @@ SearchStatus FlawSearch::step() {
                 if (!found_flaw) {
                     add_flaw(abs_id, s);
                     found_flaw = true;
+                    if (log.is_at_least_debug()) {
+                        log << "Deviation Flaw on abs state #" << abs_id <<
+                        " in s = " << s.get_id() << " with operator " <<
+                            op_id << " to concrete succ " << succ_state.get_id() <<
+                                " not contained in abstract target " << target
+                        << endl;
+                    }
                 }
                 if (pick_flawed_abstract_state ==
                     PickFlawedAbstractState::FIRST) {
@@ -701,49 +713,7 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             }
         }
     }
-    /* Original flaw search
-    FlawedState flawed_state = get_flawed_state_with_min_h();
-    SearchStatus search_status = SearchStatus::FAILED;
-    if (flawed_state == FlawedState::no_state) {
-        search_status = search_for_flaws(cegar_timer);
-        if (search_status == SearchStatus::FAILED) {
-            flawed_state = get_flawed_state_with_min_h();
-        }
-    }
 
-    if (search_status == SearchStatus::TIMEOUT)
-        return nullptr;
-
-    if (search_status == SearchStatus::FAILED) {
-        // There are flaws to refine.
-        assert(flawed_state != FlawedState::no_state);
-
-        if (log.is_at_least_debug()) {
-            log << "Use flawed state: " << flawed_state << endl;
-        }
-
-        unique_ptr<Split> split;
-        split = create_split(flawed_state.concrete_states, flawed_state.abs_id);
-
-        if (!utils::extra_memory_padding_is_reserved()) {
-            return nullptr;
-        }
-
-        if (split) {
-            last_refined_flawed_state = move(flawed_state);
-        } else {
-            last_refined_flawed_state = FlawedState::no_state;
-            // We selected an abstract state without any flaws, so we try again.
-            return get_min_h_batch_split(cegar_timer);
-        }
-
-        return split;
-    }
-
-    assert(search_status == SearchStatus::SOLVED);
-    return nullptr;
-    */
-    // TODO: test this implementation
     // Tracks abstract states for which create_split returned nullptr in
     // this round (i.e. no valid split could be found despite a flaw existing).
     // This happens with axioms when all split candidates are derived variables
@@ -784,7 +754,6 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
                 // states — no further progress possible this round, stop.
                 last_refined_flawed_state = FlawedState::no_state;
                 if (!unsplittable_abs_states.empty()) {
-                    // TODO: figure out where to go from here
                     last_stop_reason = StopReason::REFINEMENT_STALLED;
                     return nullptr;
                 }

@@ -254,6 +254,24 @@ static utils::HashSet<FactProxy> compute_possibly_before_facts(
                 }
             }
         }
+        // for tasks with axioms, also check those (treat them like zero-cost
+        // operators that are always applicable
+        for (OperatorProxy axiom : task.get_axioms()) {
+            FactProxy head = axiom.get_effects()[0].get_fact();
+            if (head == last_fact) {
+                continue; // analogous to operator_achieves fact
+            }
+            bool body_reached = true;
+            for (FactProxy cond : axiom.get_effects()[0].get_conditions()) {
+                if (pb_facts.count(cond) == 0) {
+                    body_reached = false;
+                    break;
+                }
+            }
+            if (body_reached) {
+                pb_facts.insert(head);
+            }
+        }
     }
     return pb_facts;
 }
