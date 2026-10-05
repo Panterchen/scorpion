@@ -61,6 +61,14 @@ struct FactPairHash {
 
 using CompactFactMap = phmap::flat_hash_map<FactPair, int, FactPairHash>;
 
+// Abstract transition (source, op, target) causing a deviation flaw in an
+// abstract state for which no split could be found.
+struct StalledTransition {
+    int source_id;
+    int op_id;
+    int target_id;
+};
+
 class FlawSearch {
     TaskProxy task_proxy;
     const std::vector<int> domain_sizes;
@@ -100,6 +108,10 @@ class FlawSearch {
 
     // Termination Condition
     StopReason last_stop_reason = StopReason::NONE;
+
+    // Deviating Transitions of all abstract states without a split found
+    // during the last call to get_split().
+    std::vector<StalledTransition> stalled_transitions;
 
     // Rescue Splits
     int consecutive_rescue_splits = 0;
@@ -158,6 +170,9 @@ public:
     std::unique_ptr<Split> get_split_legacy(const Solution &solution);
 
     StopReason get_last_stop_reason() const { return last_stop_reason; }
+    const std::vector<StalledTransition> &get_stalled_transitions() const {
+        return stalled_transitions;
+    }
 
     void print_statistics() const;
 };

@@ -43,6 +43,7 @@ class CEGAR {
     const int max_states;
     const int max_stored_transitions;
     const PickFlawedAbstractState pick_flawed_abstract_state;
+    const bool prune_non_induced_transitions; // true for hybrid extension
     const std::shared_ptr<const VariableDependencies> variable_dependencies;
     const std::shared_ptr<TransitionRewirer> transition_rewirer;
     std::unique_ptr<Abstraction> abstraction;
@@ -59,6 +60,13 @@ class CEGAR {
     int old_abstract_solution_cost = -1;
 
     bool may_keep_refining() const;
+
+    /*
+        Remove all stalled transitions that the flaw search could not resolve
+        if the precise extension proves them to be non-induced. Return the
+        number of pruned transitions
+     */
+    int prune_stalled_transitions();
 
     /*
       Map all states that can only be reached after reaching the goal

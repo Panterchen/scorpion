@@ -144,6 +144,17 @@ bool Abstraction::has_transition(int src, int op_id, int dest) const {
     }
 }
 
+bool Abstraction::remove_transition(int src, int op_id, int dest) const {
+    if (!transition_system || match_tree) {
+        ABORT("Pruning transitions requires transition_representation=store.");
+    }
+    if (log.is_at_least_debug()) {
+        log << "Remove non-induced transition #" << src << " -" << op_id
+        << "-> #" << dest << endl;
+    }
+    return transition_system->remove_transition(src, op_id, dest);
+}
+
 // TODO: ignore self-loops at unsolvable states.
 vector<bool> Abstraction::get_looping_operators() const {
 #ifndef NDEBUG

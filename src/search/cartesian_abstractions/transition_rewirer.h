@@ -58,8 +58,8 @@ class TransitionRewirer {
     bool precondition_derived_conflict(
         const CartesianSet &a, int op_id, int var_id) const;
 
-    bool check_regression_intersection(
-        const AbstractState &source, const AbstractState &target, int op) const;
+    // bool check_regression_intersection(
+    //     const AbstractState &source, const AbstractState &target, int op) const;
 
 
     bool explicit_transition_check(
@@ -119,6 +119,13 @@ public:
     int get_num_operators() const;
     std::pair<bool, bool> consistency_check(
         const AbstractState &v1, const AbstractState &v2, int var) const;
+    /*
+        Return true if the precise extension proves that tested transition
+        is non-induced (i.e. no concrete state in source has an op target-
+        state in target)
+     */
+    bool is_non_induced(const AbstractState &source, int op_id,
+        const AbstractState &target) const;
 };
 }
 

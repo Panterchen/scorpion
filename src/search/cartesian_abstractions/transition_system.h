@@ -52,6 +52,11 @@ public:
     void rewire(
         const AbstractStates &states, int v_id, const AbstractState &v1,
         const AbstractState &v2, int var, utils::LogProxy &log);
+    /*
+        Remove given non-loop transition (src, op_id, dest). Return false if it
+        does not exist. Caller is responsible for updating shortest paths.
+     */
+    bool remove_transition(int src, int op_id, int dest);
 
     const std::deque<Transitions> &get_incoming_transitions() const;
     const std::deque<Transitions> &get_outgoing_transitions() const;

@@ -41,6 +41,7 @@ CEGAR::CEGAR(
               ? max_transitions
               : INF),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
+      prune_non_induced_transitions(extension_strategy->supports_precise_checks()),
       variable_dependencies(make_shared<const VariableDependencies>(task_proxy)),
       transition_rewirer(
           make_shared<TransitionRewirer>(task_proxy, extension_strategy,
@@ -52,6 +53,15 @@ CEGAR::CEGAR(
       log(log),
       dot_graph_verbosity(dot_graph_verbosity) {
     assert(max_states >= 1);
+    if (prune_non_induced_transitions &&
+        (transition_representation != TransitionRepresentation::STORE ||
+        pick_flawed_abstract_state ==
+        PickFlawedAbstractState::FIRST_ON_SHORTEST_PATH)) {
+        log << "Pruning non-induced transitions (hybrid extension) requires "
+               "transition_representation=store and a pick_flawed_abstract_state "
+               "other than first_on_shortest_path." << endl;
+        utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
+    }
     int max_cached_spt_parents =
         (transition_representation == TransitionRepresentation::STORE)
             ? 0
@@ -93,6 +103,19 @@ unique_ptr<Abstraction> CEGAR::extract_abstraction() {
 vector<int> CEGAR::get_goal_distances() const {
     assert(shortest_paths);
     return shortest_paths->get_goal_distances();
+}
+
+int CEGAR::prune_stalled_transitions() {
+    int num_pruned = 0;
+    for (const StalledTransition &t : flaw_search->get_stalled_transitions()) {
+        const AbstractState &src = abstraction->get_state(t.source_id);
+        const AbstractState &dest = abstraction->get_state(t.target_id);
+        if (transition_rewirer->is_non_induced(src, t.op_id, dest) &&
+            abstraction->remove_transition(t.source_id, t.op_id, t.target_id)) {
+            ++num_pruned;
+        }
+    }
+    return num_pruned;
 }
 
 void CEGAR::separate_facts_unreachable_before_goal() const {
@@ -216,6 +239,8 @@ void CEGAR::refinement_loop() {
     utils::Timer find_flaw_timer(false);
     utils::Timer refine_timer(false);
     utils::Timer update_goal_distances_timer(false);
+    utils::Timer prune_timer(false);
+    int num_pruned_transitions = 0;
 
     while (may_keep_refining()) {
         find_trace_timer.resume();
@@ -264,6 +289,32 @@ void CEGAR::refinement_loop() {
         }
 
         if (!split) {
+            if (prune_non_induced_transitions &&
+                flaw_search->get_last_stop_reason() ==
+                StopReason::REFINEMENT_STALLED) {
+                /*
+                    Refinement stalled. Check whether the transitions causing
+                    the deviation flaws are provably non-induced. If so,
+                    remove them, recompute goal distances (the shortest path
+                    tree may have used a removed transition), and search for
+                    flaws again. Each round removes at least one transition,
+                    so this should terminate. TODO: check this
+                 */
+                prune_timer.resume();
+                int num_pruned = prune_stalled_transitions();
+                prune_timer.stop();
+                if (num_pruned > 0) {
+                    num_pruned_transitions += num_pruned;
+                    if (log.is_at_least_debug()) {
+                        log << "Pruned " << num_pruned
+                            << " non-induced transitions." << endl;
+                    }
+                    update_goal_distances_timer.resume();
+                    shortest_paths->recompute(*abstraction, abstraction->get_goals());
+                    update_goal_distances_timer.stop();
+                    continue;
+                }
+            }
             // log << "Found concrete solution." << endl;
             switch (flaw_search->get_last_stop_reason()) {
             case StopReason::SOLVED:
@@ -395,6 +446,12 @@ void CEGAR::refinement_loop() {
             << update_goal_distances_timer << endl;
         log << "Number of refinements: " << abstraction->get_num_states() - 1
             << endl;
+        if (prune_non_induced_transitions) {
+            log << "Time for pruning non-induced transitions: " << prune_timer
+                << endl;
+            log << "Number of pruned non-induced transitions: "
+                << num_pruned_transitions << endl;
+        }
     }
 }
 

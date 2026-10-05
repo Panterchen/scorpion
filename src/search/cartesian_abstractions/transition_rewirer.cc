@@ -752,8 +752,8 @@ std::pair<bool, bool> TransitionRewirer::consistency_check(
     }
     if (!derived_vars.empty()) {
         // validate the consistency of v1 and v2 w.r.t. to derived variables
-        CartesianSet ext_v1 = extension_strategy_instance->get_extension(v1.get_cartesian_set());
-        CartesianSet ext_v2 = extension_strategy_instance->get_extension(v2.get_cartesian_set());
+        CartesianSet ext_v1 = extension_strategy_instance->get_precise_extension(v1.get_cartesian_set());
+        CartesianSet ext_v2 = extension_strategy_instance->get_precise_extension(v2.get_cartesian_set());
         std::vector<int> v1_empty_dom;
         std::vector<int> v2_empty_dom;
         for (int var : derived_vars) {
@@ -771,28 +771,65 @@ std::pair<bool, bool> TransitionRewirer::consistency_check(
     return std::pair<bool, bool>(v1_consistent, v2_consistent);
 }
 
-bool TransitionRewirer::check_regression_intersection(const AbstractState &source, const AbstractState &target, int op) const {
-    // TODO: can be removed?
-    regression_strategy_instance->prepare(target.get_cartesian_set(), op);
-    // CartesianSet ext_source = extension_strategy_instance->get_extension(source.get_cartesian_set());
-    CartesianSet regr_t_o = regression_strategy_instance->get_regression(target.get_cartesian_set(), op);
-    bool valid = true;
-    for (const VariableProxy &var : vars) {
-        int var_id = var.get_id();
-        bool intersect_on_v = false;
-        int domain_size = vars[var_id].get_domain_size();
-        for (int v = 0; v < domain_size; v++) {
-            if (source.contains(var_id, v) && regr_t_o.test(var_id, v)) {
-                intersect_on_v = true;
-                break;
-            }
-        }
-        if (!intersect_on_v) {
-            valid = false;
+bool TransitionRewirer::is_non_induced(
+    const AbstractState &source, int op_id, const AbstractState &target) const {
+    /*
+        For tasks with axioms, there can be non-induced transitions resulting
+        from an imprecise overapproximation on the derived variables.
+        We use precise extension to check:
+        1) every derived precondition of op is possible in ext(source)
+        2) derived variable after applying op must be compatible with the
+            derived domains of target.
+        Both tests are overapproximations, failing one proves that no state
+        induces the transition
+     */
+    if (!task_has_axioms) {
+        return false;
+    }
+
+    CartesianSet ext_src = extension_strategy_instance->get_precise_extension(
+        source.get_cartesian_set());
+    for (const FactPair &pre : preconditions_by_operator[op_id]) {
+        if (vars[pre.var].is_derived() && !ext_src.test(pre.var, pre.value)) {
+            return true;
         }
     }
-    return valid;
+
+    CartesianSet updated = update_cartesian_set(source.get_cartesian_set(), op_id);
+    updated = intersect_cartesian_sets_on_basics(updated, target.get_cartesian_set());
+    CartesianSet ext_post = extension_strategy_instance->get_precise_extension(updated);
+    for (VariableProxy var : vars) {
+        if (var.is_derived() &&
+            !ext_post.intersects(target.get_cartesian_set(), var.get_id())) {
+            return true;
+        }
+    }
+    return false;
 }
+
+// bool TransitionRewirer::check_regression_intersection(const AbstractState
+// &source, const AbstractState &target, int op) const {
+//     // TODO: can be removed?
+//     regression_strategy_instance->prepare(target.get_cartesian_set(), op);
+//     // CartesianSet ext_source = extension_strategy_instance->get_extension(source.get_cartesian_set());
+//     CartesianSet regr_t_o = regression_strategy_instance->get_regression(target.get_cartesian_set(), op);
+//     bool valid = true;
+//     for (const VariableProxy &var : vars) {
+//         int var_id = var.get_id();
+//         bool intersect_on_v = false;
+//         int domain_size = vars[var_id].get_domain_size();
+//         for (int v = 0; v < domain_size; v++) {
+//             if (source.contains(var_id, v) && regr_t_o.test(var_id, v)) {
+//                 intersect_on_v = true;
+//                 break;
+//             }
+//         }
+//         if (!intersect_on_v) {
+//             valid = false;
+//         }
+//     }
+//     return valid;
+// }
 
 
 bool TransitionRewirer::explicit_transition_check(

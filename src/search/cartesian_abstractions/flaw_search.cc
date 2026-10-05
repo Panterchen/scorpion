@@ -422,6 +422,8 @@ unique_ptr<Split> FlawSearch::create_split(
 
 
     vector<vector<Split>> splits(task_proxy.get_variables().size());
+    // (op, target) pairs with deviation flaw; cached if no split is found
+    vector<StalledTransition> deviating_transitions;
     for (auto &pair : get_f_optimal_transitions(abstract_state_id)) {
         int op_id = pair.first;
         const vector<int> &targets = pair.second;
@@ -524,6 +526,7 @@ unique_ptr<Split> FlawSearch::create_split(
         }
 
         for (const auto &[target, fact_count] : fact_count_by_target) {
+            deviating_transitions.push_back({abstract_state_id, op_id, target});
             if (log.is_at_least_debug()) {
                 log << "--- start deviation splitting ---" << endl;
                 // For Debugging: print out info about the operator, and the abstract states involved
@@ -560,6 +563,9 @@ unique_ptr<Split> FlawSearch::create_split(
     compute_splits_timer.stop();
 
     if (num_splits == 0) {
+        stalled_transitions.insert(
+            stalled_transitions.end(), deviating_transitions.begin(),
+            deviating_transitions.end());
         return  nullptr;
     }
 
@@ -831,6 +837,7 @@ unique_ptr<Split> FlawSearch::get_split(
     const utils::CountdownTimer &cegar_timer) {
     unique_ptr<Split> split;
     last_stop_reason = StopReason::NONE;
+    stalled_transitions.clear();
 
     switch (pick_flawed_abstract_state) {
     case PickFlawedAbstractState::FIRST:

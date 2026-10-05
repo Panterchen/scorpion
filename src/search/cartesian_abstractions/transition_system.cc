@@ -70,6 +70,22 @@ void TransitionSystem::rewire(
     num_loops += num_children_loops - num_parent_loops;
 }
 
+bool TransitionSystem::remove_transition(int src, int op_id, int dest) {
+    assert(src != dest);
+    Transitions &out = outgoing[src];
+    auto out_idx = find(out.begin(), out.end(), Transition(op_id, dest));
+    if (out_idx == out.end()) {
+        return false;
+    }
+    Transitions &in = incoming[dest];
+    auto in_idx = find(in.begin(), in.end(), Transition(op_id, src));
+    assert(in_idx != in.end());
+    out.erase(out_idx);
+    in.erase(in_idx);
+    --num_non_loops;
+    return true;
+}
+
 const deque<Transitions> &TransitionSystem::get_incoming_transitions() const {
     return incoming;
 }
