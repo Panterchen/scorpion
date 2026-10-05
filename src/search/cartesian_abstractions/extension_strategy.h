@@ -47,6 +47,19 @@ public:
     virtual ~ExtensionStrategyInstance() = default;
     virtual CartesianSet get_extension(const CartesianSet &a) = 0;
     virtual int get_extension_value(const CartesianSet &a, int var) = 0;
+    /*
+        Precise variants are only used for few checks where precision is worth
+        the computational costs (consistency of new states, checking for non-
+        induced transitions when flaw search stalls).
+        By default the precise extensions default to the regular variants,
+        hybrid extension strategy overrides them.
+     */
+    virtual CartesianSet get_precise_extension(const CartesianSet &a) {
+        return get_extension(a);
+    }
+    virtual int get_precise_extension_value(const CartesianSet &a, int var) {
+        return get_extension_value(a, var);
+    }
 };
 
 /*
@@ -66,8 +79,14 @@ public:
     void dump_options() const;
     virtual std::unique_ptr<ExtensionStrategyInstance> create(
         const TaskProxy &task_proxy) const = 0;
-    // virtual CartesianSet get_extension(const CartesianSet &a) = 0;
-    // virtual int get_extension_value(const CartesianSet &a, int variable) = 0;
+    /*
+        Quick check that returns true iff the precise extension is more precise
+        than the regular one. CEGAR then tries to prune non-induced transitions
+        at which refinement stalls.
+     */
+    virtual bool supports_precise_checks() const {
+        return false;
+    }
 };
 
 extern void add_extension_strategy_options_to_feature(plugins::Feature &feature);

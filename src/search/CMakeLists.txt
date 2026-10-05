@@ -885,6 +885,7 @@ create_fast_downward_library(
         cartesian_abstractions/extension_strategy
         cartesian_abstractions/extension_strategy_uncertainty
         cartesian_abstractions/extension_strategy_naive
+        cartesian_abstractions/extension_strategy_hybrid
         cartesian_abstractions/regression_strategy
         cartesian_abstractions/regression_strategy_naive
         cartesian_abstractions/regression_strategy_composed

@@ -167,10 +167,11 @@ const vector<AxiomSplitTarget> &VariableDependencies::get_basic_targets(
         vector<AxiomSplitTarget> result;
         vector<vector<vector<bool>>> visited(vars.size());
         for (VariableProxy v : vars) {
-            visited[v.get_id()].resize(v.get_domain_size());
-            for (int c = 0; c < v.get_domain_size(); ++c) {
-                visited[v.get_id()][c].resize(2, false);
-            }
+            visited[v.get_id()].assign(v.get_domain_size(), vector<bool>(2,false));
+            // visited[v.get_id()].resize(v.get_domain_size());
+            // for (int c = 0; c < v.get_domain_size(); ++c) {
+            //     visited[v.get_id()][c].resize(2, false);
+            // }
         }
         resolve_basic_targets(var_id, value, force, result, visited);
         sort(result.begin(), result.end());

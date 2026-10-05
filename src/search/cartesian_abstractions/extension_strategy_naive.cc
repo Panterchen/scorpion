@@ -15,7 +15,6 @@ ExtensionStrategyNaiveInstance::ExtensionStrategyNaiveInstance(){
 }
 
 CartesianSet ExtensionStrategyNaiveInstance::get_extension(const CartesianSet &a) {
-    // CartesianSet result = a;
     return a;
 }
 

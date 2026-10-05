@@ -478,10 +478,18 @@ void TransitionRewirer::rewire_loops(
 
                 // if var is derived we can possibly get all 4 combinations as derived values can change even without effect on var
                 if (derived) {
-                    add_transition(incoming, outgoing, v1_id, op_id, v2_id);
-                    add_transition(incoming, outgoing, v2_id, op_id, v1_id);
-                    added_v1_v2 = true;
-                    added_v2_v1 = true;
+                    if (!derived_conflict_v1_to_v2()) {
+                        add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                        added_v1_v2 = true;
+                    }
+                    if (!derived_conflict_v2_to_v1()) {
+                        add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                        added_v2_v1 = true;
+                    }
+                    // add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                    // add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                    // added_v1_v2 = true;
+                    // added_v2_v1 = true;
                 }
             } else {
                 if (derived) {
@@ -701,9 +709,11 @@ bool TransitionRewirer::precondition_derived_conflict(
         return false;
     }
 
-
-    CartesianSet ext_a = extension_strategy_instance->get_extension(a);
-
+    // Technically we need to test against the extension to see if the precondition
+    // value is allowed inside extension, but since we already use consistency
+    // check as pre-filter before every reaching this point, it is sufficient to
+    // check against the original set. This will possibly introduce some
+    // applicability flaws, but they can be filtered out easily.
     for (const FactPair &pre : der_pre) {
         if (!a.test(pre.var, pre.value)) {
             return true;
