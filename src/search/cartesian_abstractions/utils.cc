@@ -231,6 +231,27 @@ static utils::HashSet<FactProxy> compute_possibly_before_facts(
     // Add facts from initial state.
     for (FactProxy fact : task.get_initial_state())
         pb_facts.insert(fact);
+    /*
+        For tasks with axioms:
+        Negation as failure: the default value of a derived variable holds
+        when none of its axiom rules fire. The derived value is only added
+        above, so if the default value is not true in the initial state, it
+        would never be considered reachable, since it is never added by the
+        loop above.
+        We overapproximate: The default value of a derived variable
+        is possible.
+     */
+    bool has_axioms = task_properties::has_axioms(task);
+    if (has_axioms) {
+        for (VariableProxy var : task.get_variables()) {
+            if (var.is_derived()) {
+                FactProxy default_fact = var.get_fact(var.get_default_axiom_value());
+                if (!(default_fact == last_fact)) {
+                    pb_facts.insert(default_fact);
+                }
+            }
+        }
+    }
 
     // Until no more facts can be added:
     size_t last_num_reached = 0;
@@ -255,22 +276,24 @@ static utils::HashSet<FactProxy> compute_possibly_before_facts(
                 }
             }
         }
-        // for tasks with axioms, also check those (treat them like zero-cost
+        // For tasks with axioms: also check those (treat them like zero-cost
         // operators that are always applicable
-        for (OperatorProxy axiom : task.get_axioms()) {
-            FactProxy head = axiom.get_effects()[0].get_fact();
-            if (head == last_fact) {
-                continue; // analogous to operator_achieves fact
-            }
-            bool body_reached = true;
-            for (FactProxy cond : axiom.get_effects()[0].get_conditions()) {
-                if (pb_facts.count(cond) == 0) {
-                    body_reached = false;
-                    break;
+        if (has_axioms) {
+            for (OperatorProxy axiom : task.get_axioms()) {
+                FactProxy head = axiom.get_effects()[0].get_fact();
+                if (head == last_fact) {
+                    continue; // analogous to operator_achieves fact
                 }
-            }
-            if (body_reached) {
-                pb_facts.insert(head);
+                bool body_reached = true;
+                for (FactProxy cond : axiom.get_effects()[0].get_conditions()) {
+                    if (pb_facts.count(cond) == 0) {
+                        body_reached = false;
+                        break;
+                    }
+                }
+                if (body_reached) {
+                    pb_facts.insert(head);
+                }
             }
         }
     }
