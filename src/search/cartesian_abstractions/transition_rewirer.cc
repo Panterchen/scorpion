@@ -112,7 +112,9 @@ void TransitionRewirer::rewire_incoming_transitions(
         bool added_u_v2 = false;
 
         int post = UNDEFINED;
-        bool derived = vars[var].is_derived() ; // check if var is derived
+        // flag if var is derived or if any derived variables depend on it
+        bool derived = vars[var].is_derived() ;
+        bool derived_dependent = !variable_dependencies->get_transitive_dependents(var).empty();
 
         // Lazy memoized version of checking for derived conflicts:
         optional<bool> conflict_v1_cache, conflict_v2_cache;
@@ -139,55 +141,71 @@ void TransitionRewirer::rewire_incoming_transitions(
             << " conflict_v2=" << derived_conflict_v2() << endl;
         }
 
-        if (derived) {
-            // determine derived variable value
-            CartesianSet u_cs = update_cartesian_set(u.get_cartesian_set(), op_id);
-            post = extension_strategy_instance->get_extension_value(u_cs, var);
-        } else{
-            // determine basic variable post value
+        if (!derived) {
             post = get_postcondition_value(op_id, var);
         }
 
-        if (post == UNDEFINED) {
-            // op has no precondition and no effect on var.
-            bool u_and_v1_intersect = derived || u.domain_subsets_intersect(v1, var);
-            if (u_and_v1_intersect && !derived_conflict_v1()) {
+        if (derived) {
+            // For derived variables, post is irrelevant (whether or not it is
+            // UNDEFINED): both successors are possible unless ruled out by a
+            // derived conflict.
+            if (!derived_conflict_v1()) {
                 add_transition(incoming, outgoing, u_id, op_id, v1_id);
                 added_u_v1 = true;
             }
-            /* If u and v1 don't intersect, we must add the other transition
-            and can avoid an intersection test. */
-            if (!derived_conflict_v2() && (derived || !u_and_v1_intersect || u.domain_subsets_intersect(v2, var))) {
+            if (!derived_conflict_v2()) {
                 add_transition(incoming, outgoing, u_id, op_id, v2_id);
                 added_u_v2 = true;
             }
-        } else {
-            if (derived) {
+        } else if (derived_dependent) { // split happened on a basic variable with derived dependents
+            if (post == UNDEFINED) {
+                // op has no precondition and no effect on var.
+                bool u_and_v1_intersect = u.domain_subsets_intersect(v1, var);
+                if (u_and_v1_intersect && !derived_conflict_v1()) {
+                    add_transition(incoming, outgoing, u_id, op_id, v1_id);
+                    added_u_v1 = true;
+                }
+                /* If u and v1 don't intersect, we must add the other transition
+                   and can avoid an intersection test. */
+                bool u_and_v2_possible =
+                    !u_and_v1_intersect || u.domain_subsets_intersect(v2, var);
+                if (u_and_v2_possible && !derived_conflict_v2()) {
+                    add_transition(incoming, outgoing, u_id, op_id, v2_id);
+                    added_u_v2 = true;
+                }
+            } else if (v1.contains(var, post)) {
+                // op can only end in v1.
                 if (!derived_conflict_v1()) {
                     add_transition(incoming, outgoing, u_id, op_id, v1_id);
                     added_u_v1 = true;
                 }
+            } else {
+                // op can only end in v2.
+                assert(v2.contains(var, post));
                 if (!derived_conflict_v2()) {
                     add_transition(incoming, outgoing, u_id, op_id, v2_id);
                     added_u_v2 = true;
                 }
-            } else {
-                if (v1.contains(var, post)) {
-                    // op can only end in v1.
-                    if (!derived_conflict_v1()) {
-                        add_transition(incoming, outgoing, u_id,
-                            op_id, v1_id);
-                        added_u_v1 = true;
-                    }
-                } else {
-                    // op can only end in v2.
-                    assert(v2.contains(var, post));
-                    if (!derived_conflict_v2()) {
-                        add_transition(incoming, outgoing, u_id,
-                            op_id, v2_id);
-                        added_u_v2 = true;
-                    }
+            }
+        }  else { // split on basic variable with no derived dependencies
+            if (post == UNDEFINED) {
+                // op has no precondition and no effect on var.
+                bool u_and_v1_intersect = u.domain_subsets_intersect(v1, var);
+                if (u_and_v1_intersect) {
+                    add_transition(incoming, outgoing, u_id, op_id, v1_id);
+                    added_u_v1 = true;
                 }
+                if (!u_and_v1_intersect || u.domain_subsets_intersect(v2, var)) {
+                    add_transition(incoming, outgoing, u_id, op_id, v2_id);
+                    added_u_v2 = true;
+                }
+            } else if (v1.contains(var, post)) {
+                add_transition(incoming, outgoing, u_id, op_id, v1_id);
+                added_u_v1 = true;
+            } else {
+                assert(v2.contains(var, post));
+                add_transition(incoming, outgoing, u_id, op_id, v2_id);
+                added_u_v2 = true;
             }
         }
         if (verify_transitions_debug) {
@@ -240,8 +258,11 @@ void TransitionRewirer::rewire_outgoing_transitions(
         int post = get_postcondition_value(op_id, var);
         
         bool derived = vars[var].is_derived(); // check if var is derived
+        bool derived_dependent = !variable_dependencies->get_transitive_dependents(var).empty();
 
-        // Lazy memoized calclation of derived conflict on either v1, v2
+        // Lazy memoized calculation of derived conflict on either v1, v2
+        // if v1 or v2 have an inapplicability conflict with a derived precondition variable
+        // if v1 or v2 have a conflict on the derived postconditions with w
         optional<bool> conflict_v1_cache, conflict_v2_cache;
         auto derived_conflict_v1 = [&] {
             if (!conflict_v1_cache) {
@@ -260,18 +281,6 @@ void TransitionRewirer::rewire_outgoing_transitions(
             return *conflict_v2_cache;
         };
 
-        // check if v1 or v2 have an inapplicability conflict with a derived precondition variable
-        // bool pre_derived_conflict_v1 = precondition_derived_conflict(v1.get_cartesian_set(), op_id, var);
-        // bool pre_derived_conflict_v2 = precondition_derived_conflict(v2.get_cartesian_set(), op_id, var);
-
-        // check if v1 or v2 have a conflict on the derived postconditions with w
-        // bool derived_conflict_v1 = pre_derived_conflict_v1 || !cons.first ||
-        //     conflict_derived_domains(
-        //         v1.get_cartesian_set(), op_id, w.get_cartesian_set(), var);
-        // bool derived_conflict_v2 = pre_derived_conflict_v2 || !cons.second ||
-        //     conflict_derived_domains(
-        //         v2.get_cartesian_set(), op_id, w.get_cartesian_set(), var);
-
         if (log.is_at_least_debug()) {
             log << " via operator " << op_id << " -> " << w_id
             << " : " << w.get_cartesian_set()
@@ -283,39 +292,100 @@ void TransitionRewirer::rewire_outgoing_transitions(
             << " conflict_v2" << derived_conflict_v2() << endl;
         }
 
-        if (!derived && post == UNDEFINED) {
-            assert(pre == UNDEFINED);
-            // op has no precondition and no effect on var.
-            bool v1_and_w_intersect = v1.domain_subsets_intersect(w, var);
-            if (v1_and_w_intersect && !derived_conflict_v1()) {
+        if (derived) { // variable is derived
+            // post is irrelevant for derived variables, but pre still is.
+            if (pre == UNDEFINED) {
+                if (!derived_conflict_v1()) {
+                    add_transition(incoming, outgoing, v1_id, op_id, w_id);
+                    added_v1_w = true;
+                }
+                if (!derived_conflict_v2()) {
+                    add_transition(incoming, outgoing, v2_id, op_id, w_id);
+                    added_v2_w = true;
+                }
+            } else if (v1.contains(var, pre)) {
+                // op can only start in v1.
+                if (!derived_conflict_v1()) {
+                    add_transition(incoming, outgoing, v1_id, op_id, w_id);
+                    added_v1_w = true;
+                }
+            } else {
+                // op can only start in v2.
+                assert(v2.contains(var, pre));
+                if (!derived_conflict_v2()) {
+                    add_transition(incoming, outgoing, v2_id, op_id, w_id);
+                    added_v2_w = true;
+                }
+            }
+        } else if (derived_dependent) { // variable not derived, but part of some axiom bodies
+            if (post == UNDEFINED) {
+                assert(pre == UNDEFINED);
+                // op has no precondition and no effect on var.
+                bool v1_and_w_intersect = v1.domain_subsets_intersect(w, var);
+                if (v1_and_w_intersect && !derived_conflict_v1()) {
+                    add_transition(incoming, outgoing, v1_id, op_id, w_id);
+                    added_v1_w = true;
+                }
+                /* If v1 and w don't intersect, we must add the other transition
+                and can avoid an intersection test. */
+                if ((!v1_and_w_intersect || v2.domain_subsets_intersect(w, var))
+                    && !derived_conflict_v2()) {
+                    add_transition(incoming, outgoing, v2_id, op_id, w_id);
+                    added_v2_w = true;
+                }
+            } else if (pre == UNDEFINED) {
+                // op has no precondition, but an effect on var.
+                if (!derived_conflict_v1()){
+                    add_transition(incoming, outgoing, v1_id, op_id, w_id);
+                    added_v1_w = true;
+                }
+                if (!derived_conflict_v2()){
+                    add_transition(incoming, outgoing, v2_id, op_id, w_id);
+                    added_v2_w = true;
+                }
+            } else if (v1.contains(var, pre)) {
+                // op can only start in v1.
+                if (!derived_conflict_v1()){
+                    add_transition(incoming, outgoing, v1_id, op_id, w_id);
+                    added_v1_w = true;
+                }
+            } else {
+                // op can only start in v2.
+                assert(v2.contains(var, pre));
+                if (!derived_conflict_v2()){
+                    add_transition(incoming, outgoing, v2_id, op_id, w_id);
+                    added_v2_w = true;
+                }
+            }
+        } else { // basic case
+            assert(!derived_conflict_v1() && !derived_conflict_v2());
+            if (post == UNDEFINED) {
+                assert(pre == UNDEFINED);
+                // op has no precondition and no effect on var.
+                bool v1_and_w_intersect = v1.domain_subsets_intersect(w, var);
+                if (v1_and_w_intersect) {
+                    add_transition(incoming, outgoing, v1_id, op_id, w_id);
+                    added_v1_w = true;
+                }
+                /* If v1 and w don't intersect, we must add the other transition
+                and can avoid an intersection test. */
+                if (!v1_and_w_intersect || v2.domain_subsets_intersect(w, var)) {
+                    add_transition(incoming, outgoing, v2_id, op_id, w_id);
+                    added_v2_w = true;
+                }
+            } else if (pre == UNDEFINED) {
+                // op has no precondition, but an effect on var.
                 add_transition(incoming, outgoing, v1_id, op_id, w_id);
                 added_v1_w = true;
-            }
-            /* If v1 and w don't intersect, we must add the other transition
-            and can avoid an intersection test. */
-            if ((!v1_and_w_intersect || v2.domain_subsets_intersect(w, var)) && !derived_conflict_v2()) {
                 add_transition(incoming, outgoing, v2_id, op_id, w_id);
                 added_v2_w = true;
-            }
-        } else if (pre == UNDEFINED) {
-            // op has no precondition, but an effect on var.
-            if (!derived_conflict_v1()){
+            } else if (v1.contains(var, pre)) {
+                // op can only start in v1.
                 add_transition(incoming, outgoing, v1_id, op_id, w_id);
                 added_v1_w = true;
-            }
-            if (!derived_conflict_v2()){
-                add_transition(incoming, outgoing, v2_id, op_id, w_id);
-                added_v2_w = true;
-            }
-        } else if (v1.contains(var, pre)) {
-            // op can only start in v1.
-            if (!derived_conflict_v1()){
-                add_transition(incoming, outgoing, v1_id, op_id, w_id);
-                added_v1_w = true;
-            }
-        } else {
-            // op can only start in v2.
-            if (!derived_conflict_v2()){
+            } else {
+                // op can only start in v2.
+                assert(v2.contains(var, pre));
                 add_transition(incoming, outgoing, v2_id, op_id, w_id);
                 added_v2_w = true;
             }
@@ -360,40 +430,11 @@ void TransitionRewirer::rewire_loops(
 
         int post = UNDEFINED;
         bool derived = vars[var].is_derived(); // check if var is derived
+        bool derived_dependent = !variable_dependencies->get_transitive_dependents(var).empty();
 
-        if (derived) {
-            // derived value is the same for both v1 and v2 
-            // computation of derived value only relies on basic variables,
-            // however v1 and v2 only differ in var which is derived
-            CartesianSet v1_cs = update_cartesian_set(v1.get_cartesian_set(), op_id);
-            post = extension_strategy_instance->get_extension_value(v1_cs, var);
-
-        } else {
-            // determine basic variable post value
+        if (!derived) {
             post = get_postcondition_value(op_id, var);
         }
-
-        // // conflicts, derived variable value is the same for v1 and v2, only var which is basic differs
-        // // consider conflicts on preconditions (if there are preconditions on derived variables that could
-        // // depend on the changed basic variable
-        // bool pre_conflict_v1 = precondition_derived_conflict(v1.get_cartesian_set(), op_id, var);
-        // bool pre_conflict_v2 = precondition_derived_conflict(v2.get_cartesian_set(), op_id, var);
-        //
-        // // v1 and v2 are the same except for domain of basic variable. for conflict(a,o,b) we consider the basic variable domains of a and derived variable values of b
-        // derived_conflict_v1 = pre_conflict_v1 || !cons.first ||
-        //     conflict_derived_domains(
-        //         v1.get_cartesian_set(), op_id, v1.get_cartesian_set(), var);
-        // derived_conflict_v2 = pre_conflict_v2 || !cons.second ||
-        //     conflict_derived_domains(
-        //         v2.get_cartesian_set(), op_id, v2.get_cartesian_set(), var);
-        // derived_conflict_v1_to_v2 = pre_conflict_v1 || !cons.first || !cons.second ||
-        //     conflict_derived_domains(
-        //         v1.get_cartesian_set(), op_id, v2.get_cartesian_set(), var);
-        // derived_conflict_v2_to_v1 = pre_conflict_v2 || !cons.first || !cons.second ||
-        //     conflict_derived_domains(
-        //         v2.get_cartesian_set(), op_id, v1.get_cartesian_set(), var);
-        //
-        //
         // conflicts, derived variable value is the same for v1 and v2, only var which is basic differs
         // consider conflicts on preconditions (if there are preconditions on derived variables that could
         // depend on the changed basic variable.
@@ -417,7 +458,9 @@ void TransitionRewirer::rewire_loops(
             }
             return *pre_conflict_v2_cache;
         };
-        // v1 and v2 are the same except for domain of basic variable. for conflict(a,o,b) we consider the basic variable domains of a and derived variable values of b
+        // v1 and v2 are the same except for domain of basic variable.
+        // for conflict(a,o,b) we consider the basic variable domains of a and
+        // derived variable values of b
         optional<bool> conflict_v1_cache, conflict_v2_cache;
         optional<bool> conflict_v1_to_v2_cache, conflict_v2_to_v1_cache;
         auto derived_conflict_v1 = [&]() {
@@ -449,7 +492,6 @@ void TransitionRewirer::rewire_loops(
             return *conflict_v2_to_v1_cache;
         };
 
-
         if (log.is_at_least_debug()) {
             log << "  loop op=" << op_id
                 << " pre=" << pre << " post=" << post
@@ -460,89 +502,28 @@ void TransitionRewirer::rewire_loops(
                 << " conflict_v2->v1=" << derived_conflict_v2_to_v1() << endl;
         }
 
-        if (pre == UNDEFINED) {
-            // op has no precondition on var --> it must start in v1 and v2.
-            // or var is derived
-            if (post == UNDEFINED) {
-                // op has no effect on var --> it must end in v1 and v2.
-
-                if (!derived_conflict_v1()){
+        if (derived) {
+            if (pre == UNDEFINED) {
+                // post is irrelevant: derived values can change even without an effect
+                // on var, so all four combinations are possible, subject to conflicts.
+                if (!derived_conflict_v1()) {
                     add_loop(loops, v1_id, op_id);
                     added_loop_v1 = true;
                 }
-
-                if (!derived_conflict_v2()){
+                if (!derived_conflict_v2()) {
                     add_loop(loops, v2_id, op_id);
                     added_loop_v2 = true;
                 }
-
-                // if var is derived we can possibly get all 4 combinations as derived values can change even without effect on var
-                if (derived) {
-                    if (!derived_conflict_v1_to_v2()) {
-                        add_transition(incoming, outgoing, v1_id, op_id, v2_id);
-                        added_v1_v2 = true;
-                    }
-                    if (!derived_conflict_v2_to_v1()) {
-                        add_transition(incoming, outgoing, v2_id, op_id, v1_id);
-                        added_v2_v1 = true;
-                    }
-                    // add_transition(incoming, outgoing, v1_id, op_id, v2_id);
-                    // add_transition(incoming, outgoing, v2_id, op_id, v1_id);
-                    // added_v1_v2 = true;
-                    // added_v2_v1 = true;
+                if (!derived_conflict_v1_to_v2()) {
+                    add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                    added_v1_v2 = true;
                 }
-            } else {
-                if (derived) {
-                    if (!derived_conflict_v1()) {
-                        add_loop(loops, v1_id, op_id);
-                        added_loop_v1 = true;
-                    }
-                    if (!derived_conflict_v2()) {
-                        add_loop(loops, v2_id, op_id);
-                        added_loop_v2 = true;
-                    }
-                    if (!derived_conflict_v1_to_v2()) {
-                        add_transition(incoming, outgoing, v1_id, op_id, v2_id);
-                        added_v1_v2 = true;
-                    }
-                    if (!derived_conflict_v2_to_v1()) {
-                        add_transition(incoming, outgoing, v2_id, op_id, v1_id);
-                        added_v2_v1 = true;
-                    }
-                } else {
-                    if (v2.contains(var, post)) {
-                        // op must end in v2.
-
-                        if (!derived_conflict_v1_to_v2()) {  // derived_conflict_v1_to_v2 checked for conflict on v1-o->v2
-                            add_transition(incoming, outgoing, v1_id, op_id, v2_id);
-                            added_v1_v2 = true;
-                        }
-                        if (!derived_conflict_v2()) {
-                            add_loop(loops, v2_id, op_id);
-                            added_loop_v2 = true;
-                        }
-                    } else {
-                        // op must end in v1.
-                        assert(v1.contains(var, post));
-
-                        if (!derived_conflict_v1()){
-                            add_loop(loops, v1_id, op_id);
-                            added_loop_v1 = true;
-                        }
-                        if (!derived_conflict_v2_to_v1()) { // derived_conflict_v2_to_v1 checked for conflict v1-o->v2
-                            add_transition(incoming, outgoing, v2_id, op_id, v1_id);
-                            added_v2_v1 = true;
-                        }
-                    }
+                if (!derived_conflict_v2_to_v1()) {
+                    add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                    added_v2_v1 = true;
                 }
-            }
-        } else if (v1.contains(var, pre)) {
-            // op must start in v1.
-            if (!derived) {
-                assert(post != UNDEFINED);
-            }
-            if (post == UNDEFINED) {
-                // var is derived and can end in both v1 and v2
+            } else if (v1.contains(var, pre)) {
+                // op must start in v1.
                 if (!derived_conflict_v1()) {
                     add_loop(loops, v1_id, op_id);
                     added_loop_v1 = true;
@@ -551,29 +532,9 @@ void TransitionRewirer::rewire_loops(
                     add_transition(incoming, outgoing, v1_id, op_id, v2_id);
                     added_v1_v2 = true;
                 }
-            } else if (v1.contains(var, post)) {
-                // op must end in v1.
-                if (!derived_conflict_v1()){
-                    add_loop(loops, v1_id, op_id);
-                    added_loop_v1 = true;
-                }
             } else {
-                // op must end in v2.
-                assert(v2.contains(var, post));
-                if (!derived_conflict_v1_to_v2()){
-                    add_transition(incoming, outgoing, v1_id, op_id, v2_id);
-                    added_v1_v2 = true;
-                }
-            }
-        } else {
-            // op must start in v2.
-            assert(v2.contains(var, pre));
-
-            if (!derived) {
-                assert(post != UNDEFINED);
-            }
-            if (post == UNDEFINED) {
-                // var is derived and can end in both v1 and v2
+                // op must start in v2.
+                assert(v2.contains(var, pre));
                 if (!derived_conflict_v2()) {
                     add_loop(loops, v2_id, op_id);
                     added_loop_v2 = true;
@@ -582,21 +543,135 @@ void TransitionRewirer::rewire_loops(
                     add_transition(incoming, outgoing, v2_id, op_id, v1_id);
                     added_v2_v1 = true;
                 }
-            } else if (v1.contains(var, post)) {
-                // op must end in v1.
-                if (!derived_conflict_v2_to_v1()) {
+            }
+        } else if (derived_dependent) {
+            // var is not derived, but conflicts are still possible.
+            if (pre == UNDEFINED) {
+                if (post == UNDEFINED) {
+                    // loops possible, not transitions if no derived conflict
+                    if (!derived_conflict_v1()) {
+                        add_loop(loops, v1_id, op_id);
+                        added_loop_v1 = true;
+                    }
+                    if (!derived_conflict_v2()) {
+                        add_loop(loops, v2_id, op_id);
+                        added_loop_v2 = true;
+                    }
+                } else {
+                    if (v1.contains(var, post)) { // op must end in v1.
+                        if (!derived_conflict_v1()) {
+                            add_loop(loops, v1_id, op_id);
+                            added_loop_v1 = true;
+                        }
+                        if (!derived_conflict_v2_to_v1()) {
+                            add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                            added_v2_v1 = true;
+                        }
+                    } else { // op must end in v2.
+                        assert(v2.contains(var, post));
+                        if (!derived_conflict_v1_to_v2()) {
+                            add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                            added_v1_v2 = true;
+                        }
+                        if (!derived_conflict_v2()) {
+                            add_loop(loops, v2_id, op_id);
+                            added_loop_v2 = true;
+                        }
+                    }
+                }
+            } else if (post == UNDEFINED) { // precondition but no effect on var
+                if (v1.contains(var, pre)) { // op must start in v1
+                    if (!derived_conflict_v1()) {
+                        add_loop(loops, v1_id, op_id);
+                        added_loop_v1 = true;
+                    }
+                } else { // op must start in v2
+                    assert(v2.contains(var, pre));
+                    if (!derived_conflict_v2()) {
+                        add_loop(loops, v2_id, op_id);
+                        added_loop_v2 = true;
+                    }
+                }
+            } else { // precondition and effect on var
+                if (v1.contains(var, pre)) { // op must start in v1
+                    if (v1.contains(var, post)) {
+                        if (!derived_conflict_v1()) {
+                            add_loop(loops, v1_id, op_id);
+                            added_loop_v1 = true;
+                        }
+                    } else {
+                        assert(v2.contains(var, post));
+                        if (!derived_conflict_v1_to_v2()) {
+                            add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                            added_v1_v2 = true;
+                        }
+                    }
+                } else { // op must start in v2
+                    assert(v2.contains(var, pre));
+                    if (v1.contains(var, post)) {
+                        if (!derived_conflict_v2_to_v1()) {
+                            add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                            added_v2_v1 = true;
+                        }
+                    } else {
+                        assert(v2.contains(var, post));
+                        if (!derived_conflict_v2()) {
+                            add_loop(loops, v2_id, op_id);
+                            added_loop_v2 = true;
+                        }
+                    }
+                }
+            }
+        } else { // base case, no derived variables affected
+            assert(!derived_conflict_v1() && !derived_conflict_v2() &&
+                !derived_conflict_v1_to_v2() && !derived_conflict_v2_to_v1());
+            if (pre == UNDEFINED) {
+                // op has no precondition on var -> must start in v1 and v2
+                if (post == UNDEFINED) {
+                    // op has no effect on var -> only loops possible
+                    add_loop(loops, v1_id, op_id);
+                    added_loop_v1 = true;
+                    add_loop(loops, v2_id, op_id);
+                    added_loop_v2 = true;
+                } else {
+                    // op has postcondition on var
+                    if (v2.contains(var, post)) {
+                        // op ends in v2
+                        add_loop(loops, v2_id, op_id);
+                        added_loop_v2 = true;
+                        add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                        added_v1_v2 = true;
+                    } else {
+                        // op ends in v1
+                        assert(v1.contains(var, post));
+                        add_loop(loops, v1_id, op_id);
+                        added_loop_v1 = true;
+                        add_transition(incoming, outgoing, v2_id, op_id, v1_id);
+                        added_v2_v1 = true;
+                    }
+                }
+            } else if (v1.contains(var, pre)) { // op must start in v1
+                if (v1.contains(var, post)) {
+                    add_loop(loops, v1_id, op_id);
+                    added_loop_v1 = true;
+                } else {
+                    assert(v2.contains(var, post));
+                    add_transition(incoming, outgoing, v1_id, op_id, v2_id);
+                    added_v1_v2 = true;
+                }
+            } else { // op must start in v2
+                assert(v2.contains(var, pre));
+                if (v1.contains(var, post)) {
                     add_transition(incoming, outgoing, v2_id, op_id, v1_id);
                     added_v2_v1 = true;
-                }
-            } else {
-                // op must end in v2.
-                assert(v2.contains(var, post));
-                if (!derived_conflict_v2()) {
+                } else {
+                    assert(v2.contains(var, post));
                     add_loop(loops, v2_id, op_id);
                     added_loop_v2 = true;
                 }
             }
         }
+
         if (verify_transitions_debug) {
             verify_rewiring_loops(
                 v1, v2, op_id, added_loop_v1, added_loop_v2, added_v1_v2,

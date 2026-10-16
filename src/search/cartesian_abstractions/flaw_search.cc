@@ -325,7 +325,7 @@ void FlawSearch::add_axiom_fallback_candidates(
     if (log.is_at_least_debug()) {
         log << "try splitting on basic targets for pair " << var << "=" << bad_value << endl;
     }
-    bool found_split = add_candidates_for_basic_targets(
+    bool found_split = add_candidates_for_basic_targets( //TODO: rename targets in this context...
         variable_dependencies->get_basic_targets(var, bad_value, false), count,
         abs_state, splits, target_abs_state);
     if (log.is_at_least_debug()) log << "split successful ? " << found_split << endl;
@@ -460,7 +460,6 @@ unique_ptr<Split> FlawSearch::create_split(
             for (int value = 0; value < domain_sizes[fact.var]; ++value) {
                 if (state_value_count[value] > 0) {
                     assert(value != fact.value);
-                    //cout << "WANTED fact value " << fact.value << endl;
                     add_split(
                         splits, Split(
                                     abstract_state_id, fact.var, value,
@@ -515,7 +514,7 @@ unique_ptr<Split> FlawSearch::create_split(
                         int state_value = state[var].get_value();
                         ++fact_count[FactPair(var, state_value)];
                     }
-                    // NEU: derived Variablen separat aus succ_state erfassen
+                    // derived variables get counted in the successor states
                     for (VariableProxy var : task_proxy.get_variables()) {
                         if (var.is_derived()) {
                             ++fact_count[FactPair(var.get_id(), succ_state[var.get_id()].get_value())];
@@ -543,6 +542,7 @@ unique_ptr<Split> FlawSearch::create_split(
                 log << "Abstract target state : " << abstraction.get_state(target).get_cartesian_set() << endl;
 
             }
+            // only relevant for composed regression option... not currently used
             regression_strategy_instance->prepare(
                 abstraction.get_state(target).get_cartesian_set(), op_id);
 
@@ -579,7 +579,7 @@ FlawedState FlawSearch::get_next_usable_flawed_state(
     std::unordered_set<int> unsplittable_abstract_states) {
     FlawedState flawed_state = get_flawed_state_with_min_h();
     while (flawed_state != FlawedState::no_state  &&
-        unsplittable_abstract_states.count(flawed_state.abs_id)) {
+        unsplittable_abstract_states.contains(flawed_state.abs_id)) {
         flawed_state = get_flawed_state_with_min_h();
     }
     return flawed_state;
@@ -667,7 +667,6 @@ unique_ptr<Split> FlawSearch::get_single_split(
 
         unique_ptr<Split> split = create_split({state_id}, flawed_state.abs_id);
         if (split) {
-            consecutive_rescue_splits = 0;
             return split;
         }
         last_stop_reason = StopReason::REFINEMENT_STALLED;
@@ -715,7 +714,7 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             assert(!task_properties::is_goal_state(task_proxy, state));
             int abs_id = get_abstract_state_id(state);
             if (get_h_value(abs_id) == old_h) {
-                add_flaw(abs_id, state);
+                add_flaw(abs_id, state); // TODO
             }
         }
     }
@@ -759,10 +758,10 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
                 // A fresh search found nothing beyond already-known-unsplittable
                 // states — no further progress possible this round, stop.
                 last_refined_flawed_state = FlawedState::no_state;
-                if (!unsplittable_abs_states.empty()) {
-                    last_stop_reason = StopReason::REFINEMENT_STALLED;
-                    return nullptr;
-                }
+                // if (!unsplittable_abs_states.empty()) {
+                //     last_stop_reason = StopReason::REFINEMENT_STALLED;
+                //     return nullptr;
+                // }
                 last_stop_reason = StopReason::REFINEMENT_STALLED;
                 return nullptr;
             }
@@ -783,7 +782,7 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             // Valid split found — store the refined state for recycling
             // on the next call and return the split to the caller.
             last_refined_flawed_state = move(flawed_state);
-            consecutive_rescue_splits = 0;
+            // consecutive_rescue_splits = 0;
             return split;
         } else {
             // create_split returned nullptr — no valid split could be

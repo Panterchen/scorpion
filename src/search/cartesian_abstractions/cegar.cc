@@ -53,7 +53,8 @@ CEGAR::CEGAR(
       log(log),
       dot_graph_verbosity(dot_graph_verbosity) {
     assert(max_states >= 1);
-    if (prune_non_induced_transitions &&
+    if (task_properties::has_axioms(task_proxy) &&
+        prune_non_induced_transitions &&
         (transition_representation != TransitionRepresentation::STORE ||
         pick_flawed_abstract_state ==
         PickFlawedAbstractState::FIRST_ON_SHORTEST_PATH)) {
@@ -315,7 +316,6 @@ void CEGAR::refinement_loop() {
                     continue;
                 }
             }
-            // log << "Found concrete solution." << endl;
             switch (flaw_search->get_last_stop_reason()) {
             case StopReason::SOLVED:
                 log << "Found concrete solution." << endl;

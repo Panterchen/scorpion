@@ -113,10 +113,6 @@ class FlawSearch {
     // during the last call to get_split().
     std::vector<StalledTransition> stalled_transitions;
 
-    // Rescue Splits
-    int consecutive_rescue_splits = 0;
-    static const int MAX_CONSECUTIVE_RESCUE_SPLITS = 20;
-
     int get_abstract_state_id(const State &state) const;
     Cost get_h_value(int abstract_state_id) const;
     void add_flaw(int abs_id, const State &state);
