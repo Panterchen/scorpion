@@ -45,8 +45,7 @@ CEGAR::CEGAR(
       variable_dependencies(make_shared<const VariableDependencies>(task_proxy)),
       transition_rewirer(
           make_shared<TransitionRewirer>(task_proxy, extension_strategy,
-              regression_strategy, variable_dependencies,
-              verify_transitions_debug)),
+              variable_dependencies, verify_transitions_debug)),
       abstraction(make_unique<Abstraction>(
           task, transition_rewirer, transition_representation, log)),
       timer(max_time),

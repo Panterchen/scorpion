@@ -2,7 +2,6 @@
 #define CARTESIAN_ABSTRACTIONS_TRANSITION_REWIRER_H
 
 #include "extension_strategy.h"
-#include "regression_strategy.h"
 #include "types.h"
 #include "utils.h"
 
@@ -19,14 +18,12 @@ class TaskProxy;
 
 namespace cartesian_abstractions {
 class ExtensionStrategy;
-class RegressionStrategy;
 class VariableDependencies;
 
 class TransitionRewirer {
 
     const VariablesProxy vars;
     std::unique_ptr<ExtensionStrategyInstance> extension_strategy_instance;
-    std::unique_ptr<RegressionStrategyInstance> regression_strategy_instance;
 
     const std::vector<std::vector<FactPair>> preconditions_by_operator;
     const std::vector<std::vector<FactPair>> postconditions_by_operator;
@@ -58,10 +55,6 @@ class TransitionRewirer {
     bool precondition_derived_conflict(
         const CartesianSet &a, int op_id, int var_id) const;
 
-    // bool check_regression_intersection(
-    //     const AbstractState &source, const AbstractState &target, int op) const;
-
-
     bool explicit_transition_check(
         const AbstractState &source, const AbstractState &target, int op,
         int var_id) const;
@@ -80,7 +73,6 @@ class TransitionRewirer {
 
 public:
     explicit TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategy> &extension_strategy,
-        const std::shared_ptr<RegressionStrategy> &regression_strategy,
         const std::shared_ptr<const VariableDependencies> &variable_dependencies,
         bool verify_transitions_debug);
 

@@ -3,7 +3,6 @@
 #include "abstract_state.h"
 #include "transition.h"
 #include "extension_strategy.h"
-#include "regression_strategy.h"
 #include "utils.h"
 
 #include "../task_utils/task_properties.h"
@@ -46,12 +45,10 @@ static void add_loop(deque<Loops> &loops, int state_id, int op_id) {
 
 TransitionRewirer::TransitionRewirer(const TaskProxy &task,
     const std::shared_ptr<ExtensionStrategy> &extension_strategy,
-    const std::shared_ptr<RegressionStrategy> &regression_strategy,
     const std::shared_ptr<const VariableDependencies> &variable_dependencies,
     bool verify_transitions_debug)
     : vars(task.get_variables()),
     extension_strategy_instance(extension_strategy->create(task)),
-    regression_strategy_instance(regression_strategy->create(task, extension_strategy)),
     preconditions_by_operator(compute_preconditions_by_operator(task.get_operators())),
     postconditions_by_operator(compute_postconditions_by_operator(task.get_operators())),
     variable_dependencies(variable_dependencies),
@@ -881,31 +878,6 @@ bool TransitionRewirer::is_non_induced(
     }
     return false;
 }
-
-// bool TransitionRewirer::check_regression_intersection(const AbstractState
-// &source, const AbstractState &target, int op) const {
-//     // TODO: can be removed?
-//     regression_strategy_instance->prepare(target.get_cartesian_set(), op);
-//     // CartesianSet ext_source = extension_strategy_instance->get_extension(source.get_cartesian_set());
-//     CartesianSet regr_t_o = regression_strategy_instance->get_regression(target.get_cartesian_set(), op);
-//     bool valid = true;
-//     for (const VariableProxy &var : vars) {
-//         int var_id = var.get_id();
-//         bool intersect_on_v = false;
-//         int domain_size = vars[var_id].get_domain_size();
-//         for (int v = 0; v < domain_size; v++) {
-//             if (source.contains(var_id, v) && regr_t_o.test(var_id, v)) {
-//                 intersect_on_v = true;
-//                 break;
-//             }
-//         }
-//         if (!intersect_on_v) {
-//             valid = false;
-//         }
-//     }
-//     return valid;
-// }
-
 
 bool TransitionRewirer::explicit_transition_check(
     const AbstractState &source, const AbstractState &target, const int op,
