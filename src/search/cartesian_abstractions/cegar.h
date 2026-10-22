@@ -44,6 +44,7 @@ class CEGAR {
     const int max_stored_transitions;
     const PickFlawedAbstractState pick_flawed_abstract_state;
     const bool prune_non_induced_transitions; // true for hybrid extension
+    const GoalProcessing goal_processing;
     const std::shared_ptr<const VariableDependencies> variable_dependencies;
     const std::shared_ptr<TransitionRewirer> transition_rewirer;
     std::unique_ptr<Abstraction> abstraction;
@@ -77,6 +78,7 @@ class CEGAR {
       simplifies the implementation.
     */
     void separate_facts_unreachable_before_goal() const;
+    void preprocess_goals() const;
 
     // Build abstraction.
     void refinement_loop();
@@ -96,6 +98,7 @@ public:
         PickSplit pick_split, PickSplit tiebreak_split,
         int max_concrete_states_per_abstract_state, int max_state_expansions,
         TransitionRepresentation transition_representation,
+        GoalProcessing goal_processing,
         utils::RandomNumberGenerator &rng, utils::LogProxy &log,
         DotGraphVerbosity dot_graph_verbosity);
     ~CEGAR();

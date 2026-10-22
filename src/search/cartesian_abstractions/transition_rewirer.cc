@@ -207,7 +207,7 @@ void TransitionRewirer::rewire_incoming_transitions(
         }
         if (verify_transitions_debug) {
             verify_rewiring_incoming(
-                u, v1, v2, op_id, added_u_v1, added_u_v2, cons, var);
+                u, v1, v2, op_id, added_u_v1, added_u_v2, cons);
         }
         if (log.is_at_least_debug()) {
             if (added_u_v1) log << "Added u -> v1" << endl;
@@ -389,7 +389,7 @@ void TransitionRewirer::rewire_outgoing_transitions(
         }
         if (verify_transitions_debug) {
             verify_rewiring_outgoing(
-                w, v1, v2, op_id, added_v1_w, added_v2_w, cons, var);
+                w, v1, v2, op_id, added_v1_w, added_v2_w, cons);
         }
         if (log.is_at_least_debug()) {
             if (added_v1_w) log << "Added v1 -> w" << endl;
@@ -672,7 +672,7 @@ void TransitionRewirer::rewire_loops(
         if (verify_transitions_debug) {
             verify_rewiring_loops(
                 v1, v2, op_id, added_loop_v1, added_loop_v2, added_v1_v2,
-                added_v2_v1, cons, var);
+                added_v2_v1, cons);
         }
         if (log.is_at_least_debug()) {
             if (added_loop_v1) log << "Added loop v1" << endl;
@@ -724,6 +724,15 @@ CartesianSet TransitionRewirer::intersect_cartesian_sets_on_basics(const Cartesi
     return result;
 }
 
+void TransitionRewirer::intersect_on_basics_inplace(
+    CartesianSet &a, const CartesianSet &b) const {
+    for (VariableProxy v : vars) {
+        if (!v.is_derived()) {
+            a.intersect_var(b, v.get_id()); // TODO
+        }
+    }
+}
+
 bool TransitionRewirer::conflict_derived_domains(
     const CartesianSet &a, int op_id, const CartesianSet &b, int var_id) const {
     // TODO: can this be made more efficient, if we only consider variables that are affected by the split?
@@ -737,7 +746,9 @@ bool TransitionRewirer::conflict_derived_domains(
     }
 
     CartesianSet a_updated = update_cartesian_set(a, op_id);
-    a_updated = intersect_cartesian_sets_on_basics(a_updated, b);
+
+    intersect_on_basics_inplace(a_updated, b);
+
     CartesianSet extended_a_o = extension_strategy_instance->get_extension(a_updated);
     if (vars[var_id].is_derived()) {  // split variable is derived, check conflict for the variable
         if (!extended_a_o.intersects(b, var_id)) {
@@ -868,7 +879,8 @@ bool TransitionRewirer::is_non_induced(
     }
 
     CartesianSet updated = update_cartesian_set(source.get_cartesian_set(), op_id);
-    updated = intersect_cartesian_sets_on_basics(updated, target.get_cartesian_set());
+    // updated = intersect_cartesian_sets_on_basics(updated, target.get_cartesian_set());
+    intersect_on_basics_inplace(updated, target.get_cartesian_set());
     CartesianSet ext_post = extension_strategy_instance->get_precise_extension(updated);
     for (VariableProxy var : vars) {
         if (var.is_derived() &&
@@ -880,8 +892,8 @@ bool TransitionRewirer::is_non_induced(
 }
 
 bool TransitionRewirer::explicit_transition_check(
-    const AbstractState &source, const AbstractState &target, const int op,
-    const int var_id) const {
+    const AbstractState &source, const AbstractState &target,
+    const int op) const {
         /*
      *  Literal implementation of the CheckTransition(a, o, b) algorithm.
      *  For every basic variable: precondition / postcondition / no-effect
@@ -899,8 +911,7 @@ bool TransitionRewirer::explicit_transition_check(
      *  genuine ground-truth reference for verify_transitions_debug,
      *  independent of the var_id-scoped optimization used elsewhere.
      */
-    (void)var_id;  // kept for call-site/signature compatibility only --
-                    // the literal check does not scope by split variable.
+
     for (const VariableProxy &var : vars) {
         if (var.is_derived()) {
             continue;
@@ -925,7 +936,8 @@ bool TransitionRewirer::explicit_transition_check(
     // does, just performed once here for every derived variable instead of
     // being scoped to var_id's dependents.
     CartesianSet updated = update_cartesian_set(source.get_cartesian_set(), op);
-    updated = intersect_cartesian_sets_on_basics(updated, target.get_cartesian_set());
+    intersect_on_basics_inplace(updated, target.get_cartesian_set());
+    // updated = intersect_cartesian_sets_on_basics(updated, target.get_cartesian_set());
     CartesianSet extended = extension_strategy_instance->get_extension(updated);
 
     for (const VariableProxy &var : vars) {
@@ -948,10 +960,9 @@ bool TransitionRewirer::explicit_transition_check(
 
 void TransitionRewirer::verify_rewiring_incoming(
     const AbstractState &u, const AbstractState &v1, const AbstractState &v2,
-    int op_id, bool added_u_v1, bool added_u_v2, pair<bool, bool> cons,
-    int var_id) const {
-    bool valid_u_v1 = explicit_transition_check(u, v1, op_id, var_id);
-    bool valid_u_v2 = explicit_transition_check(u, v2, op_id, var_id);
+    int op_id, bool added_u_v1, bool added_u_v2, pair<bool, bool> cons) const {
+    bool valid_u_v1 = explicit_transition_check(u, v1, op_id);
+    bool valid_u_v2 = explicit_transition_check(u, v2, op_id);
     if (valid_u_v1 != added_u_v1) {
         std::cout << "u (" << u.get_id() << ") -- " << op_id << "--> v1 ("
         << v1.get_id() << ", consistent: " << cons.first << "), added : "
@@ -965,10 +976,9 @@ void TransitionRewirer::verify_rewiring_incoming(
 }
 void TransitionRewirer::verify_rewiring_outgoing(
     const AbstractState &w, const AbstractState &v1, const AbstractState &v2,
-    int op_id, bool added_v1_w, bool added_v2_w, pair<bool, bool> cons,
-    int var_id) const {
-    bool valid_v1_w = explicit_transition_check(v1, w, op_id, var_id);
-    bool valid_v2_w = explicit_transition_check(v2, w, op_id, var_id);
+    int op_id, bool added_v1_w, bool added_v2_w, pair<bool, bool> cons) const {
+    bool valid_v1_w = explicit_transition_check(v1, w, op_id);
+    bool valid_v2_w = explicit_transition_check(v2, w, op_id);
     if (valid_v1_w != added_v1_w) {
         std::cout << "v1 (" << v1.get_id() << ", consistent: " << cons.first
         << ") -- " << op_id << "-->  w ("  << w.get_id()  << "), added : "
@@ -983,11 +993,11 @@ void TransitionRewirer::verify_rewiring_outgoing(
 void TransitionRewirer::verify_rewiring_loops(
     const AbstractState &v1, const AbstractState &v2, int op_id,
     bool added_loop_v1, bool added_loop_v2, bool added_v1_v2, bool added_v2_v1,
-    pair<bool, bool> cons, int var_id) const {
-    bool valid_v1 = explicit_transition_check(v1, v1, op_id, var_id);
-    bool valid_v2 = explicit_transition_check(v2, v2, op_id, var_id);
-    bool valid_v1_v2 = explicit_transition_check(v1, v2, op_id, var_id);
-    bool valid_v2_v1 = explicit_transition_check(v2, v1, op_id, var_id);
+    pair<bool, bool> cons) const {
+    bool valid_v1 = explicit_transition_check(v1, v1, op_id);
+    bool valid_v2 = explicit_transition_check(v2, v2, op_id);
+    bool valid_v1_v2 = explicit_transition_check(v1, v2, op_id);
+    bool valid_v2_v1 = explicit_transition_check(v2, v1, op_id);
     if (valid_v1 != added_loop_v1) {
         std::cout << "v1 (" << v1.get_id() << ", consistent: " << cons.first
         << ") loop " << op_id << ", added : "

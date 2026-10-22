@@ -26,6 +26,12 @@ enum class TransitionRepresentation {
     COMPUTE,
 };
 
+enum class GoalProcessing {
+    GREEDY,
+    LAZY,
+    GREEDY_SINGLE,
+};
+
 enum class MatcherVariable : char {
     UNAFFECTED,
     SINGLE_VALUE,

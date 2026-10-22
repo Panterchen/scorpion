@@ -83,7 +83,9 @@ CostSaturation::CostSaturation(
     PickFlawedAbstractState pick_flawed_abstract_state,
     PickSplit pick_split, PickSplit tiebreak_split,
     int max_concrete_states_per_abstract_state, int max_state_expansions,
-    TransitionRepresentation transition_representation, int memory_padding_mb,
+    TransitionRepresentation transition_representation,
+    GoalProcessing goal_processing,
+    int memory_padding_mb,
     utils::RandomNumberGenerator &rng, utils::LogProxy &log,
     DotGraphVerbosity dot_graph_verbosity)
     : subtask_generators(subtask_generators),
@@ -101,6 +103,7 @@ CostSaturation::CostSaturation(
           max_concrete_states_per_abstract_state),
       max_state_expansions(max_state_expansions),
       transition_representation(transition_representation),
+      goal_processing(goal_processing),
       memory_padding_mb(memory_padding_mb),
       rng(rng),
       log(log),
@@ -245,7 +248,8 @@ void CostSaturation::build_abstractions(
             time_limit, verify_transitions_debug,
             pick_flawed_abstract_state, pick_split, tiebreak_split,
             max_concrete_states_per_abstract_state, max_state_expansions,
-            transition_representation, rng, log, dot_graph_verbosity);
+            transition_representation, goal_processing,
+            rng, log, dot_graph_verbosity);
         // Reset new-handler if we ran out of memory.
         if (!utils::extra_memory_padding_is_reserved()) {
             set_new_handler(fast_downward_new_handler);

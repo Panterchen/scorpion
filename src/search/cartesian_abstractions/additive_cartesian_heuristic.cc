@@ -27,7 +27,8 @@ AdditiveCartesianHeuristic::AdditiveCartesianHeuristic(
     PickFlawedAbstractState pick_flawed_abstract_state, PickSplit pick_split,
     PickSplit tiebreak_split, int max_concrete_states_per_abstract_state,
     int max_state_expansions,
-    TransitionRepresentation transition_representation, int memory_padding,
+    TransitionRepresentation transition_representation,
+    GoalProcessing goal_processing, int memory_padding,
     int random_seed, DotGraphVerbosity dot_graph_verbosity,
     bool use_general_costs, const shared_ptr<AbstractTask> &transform,
     bool cache_estimates, const string &description, utils::Verbosity verbosity)
@@ -38,7 +39,8 @@ AdditiveCartesianHeuristic::AdditiveCartesianHeuristic(
         verify_transitions_debug,
         pick_flawed_abstract_state, pick_split, tiebreak_split,
         max_concrete_states_per_abstract_state, max_state_expansions,
-        transition_representation, memory_padding, *utils::get_rng(random_seed),
+        transition_representation, goal_processing, memory_padding,
+        *utils::get_rng(random_seed),
         log, dot_graph_verbosity);
     heuristic_functions =
         cost_saturation.generate_heuristic_functions(transform);
@@ -139,6 +141,7 @@ public:
             opts.get<int>("max_concrete_states_per_abstract_state"),
             opts.get<int>("max_state_expansions"),
             opts.get<TransitionRepresentation>("transition_representation"),
+            opts.get<GoalProcessing>("goal_processing"),
             opts.get<int>("memory_padding"),
             utils::get_rng_arguments_from_options(opts),
             opts.get<DotGraphVerbosity>("dot_graph_verbosity"),

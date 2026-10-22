@@ -29,6 +29,7 @@ CEGAR::CEGAR(
     PickSplit pick_split, PickSplit tiebreak_split,
     int max_concrete_states_per_abstract_state, int max_state_expansions,
     TransitionRepresentation transition_representation,
+    GoalProcessing goal_processing,
     utils::RandomNumberGenerator &rng, utils::LogProxy &log,
     DotGraphVerbosity dot_graph_verbosity)
     : task_proxy(*task),
@@ -42,6 +43,7 @@ CEGAR::CEGAR(
               : INF),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
       prune_non_induced_transitions(extension_strategy->supports_precise_checks()),
+      goal_processing(goal_processing),
       variable_dependencies(make_shared<const VariableDependencies>(task_proxy)),
       transition_rewirer(
           make_shared<TransitionRewirer>(task_proxy, extension_strategy,
@@ -161,6 +163,41 @@ void CEGAR::separate_facts_unreachable_before_goal() const {
     }
 }
 
+void CEGAR::preprocess_goals() const {
+    switch (goal_processing) {
+        case GoalProcessing::LAZY:
+            break;
+        case GoalProcessing::GREEDY_SINGLE:
+            if (task_proxy.get_goals().size() == 1) {
+                separate_facts_unreachable_before_goal();
+            }
+            break;
+        case GoalProcessing::GREEDY:
+        default:
+            if (task_proxy.get_goals().size() == 1) {
+                separate_facts_unreachable_before_goal();
+            } else {
+                // Iteratively split off the next goal fact from the current goal state.
+                assert(abstraction->get_num_states() == 1);
+                const AbstractState *current = &abstraction->get_initial_state();
+                for (FactProxy goal : task_proxy.get_goals()) {
+                    if (!may_keep_refining()) {
+                        break;
+                    }
+                    FactPair fact = goal.get_pair();
+                    auto pair = abstraction->refine(*current, fact.var, {fact.value});
+                    dump_dot_graph();
+                    current = &abstraction->get_state(pair.second);
+                }
+                assert(
+                    !may_keep_refining() ||
+                    !abstraction->get_goals().count(
+                        abstraction->get_initial_state().get_id()));
+                assert(abstraction->get_goals().size() == 1);
+            }
+    }
+}
+
 bool CEGAR::may_keep_refining() const {
     if (abstraction->get_num_states() >= max_states) {
         if (log.is_at_least_normal()) {
@@ -205,28 +242,10 @@ void CEGAR::refinement_loop() {
                 << ") = " << goal.get_value() << endl;
         }
     }
-
-    if (task_proxy.get_goals().size() == 1) {
-        separate_facts_unreachable_before_goal();
-    } else {
-        // Iteratively split off the next goal fact from the current goal state.
-        assert(abstraction->get_num_states() == 1);
-        const AbstractState *current = &abstraction->get_initial_state();
-        for (FactProxy goal : task_proxy.get_goals()) {
-            if (!may_keep_refining()) {
-                break;
-            }
-            FactPair fact = goal.get_pair();
-            auto pair = abstraction->refine(*current, fact.var, {fact.value});
-            dump_dot_graph();
-            current = &abstraction->get_state(pair.second);
-        }
-        assert(
-            !may_keep_refining() ||
-            !abstraction->get_goals().count(
-                abstraction->get_initial_state().get_id()));
-        assert(abstraction->get_goals().size() == 1);
-    }
+    utils::Timer process_goals_timer(false);
+    process_goals_timer.resume();
+    preprocess_goals();
+    process_goals_timer.stop();
 
     // Initialize abstract goal distances and shortest path tree.
     if (log.is_at_least_debug()) {
@@ -437,6 +456,7 @@ void CEGAR::refinement_loop() {
         }
     }
     if (log.is_at_least_normal()) {
+        log << "Time for preprocessing goals: " << process_goals_timer << endl;
         log << "Time for finding abstract traces: " << find_trace_timer << endl;
         log << "Time for finding flaws and computing splits: "
             << find_flaw_timer << endl;

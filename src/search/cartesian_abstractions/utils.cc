@@ -414,6 +414,19 @@ static void add_transition_representation_option(plugins::Feature &feature) {
         "how to compute transitions between abstract states", "store");
 }
 
+static void add_goal_processing_option(plugins::Feature &feature) {
+    feature.add_option<GoalProcessing>(
+        "goal_processing",
+        "how goals should be handled in the abstraction refinement."
+        "Default is 'greedy' (i.e. preprocess all goal atoms before searching"
+        "for flaws). Other options: 'lazy' (only fix goal flaws when detected),"
+        "'greedy_single' (if we have a single goal atom, preprocess it, else"
+        "fix goal flaws lazy)",
+        "greedy"
+        );
+}
+
+
 string create_dot_graph(
     const TaskProxy &task_proxy, const Abstraction &abstraction) {
     ostringstream oss;
@@ -505,6 +518,7 @@ void add_common_cegar_options(plugins::Feature &feature) {
         "debugging.",
         "false");
 
+    add_goal_processing_option(feature);
     add_transition_representation_option(feature);
     add_pick_flawed_abstract_state_strategies(feature);
     add_pick_split_strategies(feature);
@@ -530,4 +544,13 @@ static plugins::TypedEnumPlugin<TransitionRepresentation>
         {"store", "store transitions"},
         {"compute", "efficiently compute transitions on demand"},
     });
+
+static plugins::TypedEnumPlugin<GoalProcessing>
+    _enum_plugin_goal_processing({
+        {"greedy", "preprocess greedily"},
+        {"lazy", "don't preprocess, detect goal flaws lazy"},
+        {"greedy_single", "preprocess greedy for single goal, lazy detection"
+                          "for more than one goal"},
+    });
+
 }

@@ -49,6 +49,8 @@ class TransitionRewirer {
     CartesianSet update_cartesian_set(const CartesianSet &a, int op_id) const;
     CartesianSet intersect_cartesian_sets_on_basics(const CartesianSet &a,
         const CartesianSet &b) const;
+    void intersect_on_basics_inplace(CartesianSet &a,
+        const CartesianSet &b) const;
     bool conflict_derived_domains(
         const CartesianSet &a, int op_id, const CartesianSet &b,
         int var_id) const;
@@ -56,20 +58,19 @@ class TransitionRewirer {
         const CartesianSet &a, int op_id, int var_id) const;
 
     bool explicit_transition_check(
-        const AbstractState &source, const AbstractState &target, int op,
-        int var_id) const;
+        const AbstractState &source, const AbstractState &target, int op) const;
     void verify_rewiring_incoming(
         const AbstractState &u, const AbstractState &v1,
         const AbstractState &v2, int op_id, bool added_u_v1, bool added_u_v2,
-        std::pair<bool, bool> cons, int var_id) const;
+        std::pair<bool, bool> cons) const;
     void verify_rewiring_outgoing(
         const AbstractState &w, const AbstractState &v1,
         const AbstractState &v2, int op_id, bool added_v1_w, bool added_v2_w,
-        std::pair<bool, bool> cons, int var_id) const;
+        std::pair<bool, bool> cons) const;
     void verify_rewiring_loops(
         const AbstractState &v1, const AbstractState &v2, int op_id,
         bool added_loop_v1, bool added_loop_v2, bool added_v1_v2,
-        bool added_v2_v1, std::pair<bool, bool> cons, int var_id) const;
+        bool added_v2_v1, std::pair<bool, bool> cons) const;
 
 public:
     explicit TransitionRewirer(const TaskProxy &task, const std::shared_ptr<ExtensionStrategy> &extension_strategy,

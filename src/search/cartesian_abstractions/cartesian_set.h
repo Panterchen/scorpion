@@ -91,6 +91,8 @@ public:
     }
     bool intersects(const CartesianSet &other) const;
 
+    void intersect_var(const CartesianSet &other, int var);
+
     std::vector<int> get_intersection_values( const CartesianSet &other, int var) const;
 
     bool is_superset_of(const CartesianSet &other) const;

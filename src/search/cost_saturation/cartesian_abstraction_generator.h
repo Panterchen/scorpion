@@ -3,6 +3,8 @@
 
 #include "abstraction_generator.h"
 
+#include "../cartesian_abstractions/types.h"
+
 #include <memory>
 #include <vector>
 
@@ -13,6 +15,7 @@ enum class PickFlawedAbstractState;
 enum class PickSplit;
 class SubtaskGenerator;
 enum class TransitionRepresentation;
+enum class GoalProcessing;
 class ExtensionStrategy;
 class RegressionStrategy;
 }
@@ -34,6 +37,7 @@ class CartesianAbstractionGenerator : public AbstractionGenerator {
     const bool verify_transitions_debug;
     const cartesian_abstractions::TransitionRepresentation
         transition_representation;
+    const cartesian_abstractions::GoalProcessing goal_processing;
     const cartesian_abstractions::PickFlawedAbstractState
         pick_flawed_abstract_state;
     const cartesian_abstractions::PickSplit pick_split;
@@ -69,6 +73,7 @@ public:
         int max_concrete_states_per_abstract_state, int max_state_expansions,
         cartesian_abstractions::TransitionRepresentation
             transition_representation,
+        cartesian_abstractions::GoalProcessing goal_processing,
         int memory_padding, int random_seed,
         cartesian_abstractions::DotGraphVerbosity dot_graph_verbosity,
         utils::Verbosity verbosity);

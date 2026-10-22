@@ -61,6 +61,7 @@ CartesianAbstractionGenerator::CartesianAbstractionGenerator(
     cartesian_abstractions::PickSplit tiebreak_split,
     int max_concrete_states_per_abstract_state, int max_state_expansions,
     cartesian_abstractions::TransitionRepresentation transition_representation,
+    cartesian_abstractions::GoalProcessing goal_processing,
     int memory_padding, int random_seed,
     cartesian_abstractions::DotGraphVerbosity dot_graph_verbosity,
     utils::Verbosity verbosity)
@@ -73,6 +74,7 @@ CartesianAbstractionGenerator::CartesianAbstractionGenerator(
       max_time(max_time),
       verify_transitions_debug(verify_transitions_debug),
       transition_representation(transition_representation),
+      goal_processing(goal_processing),
       pick_flawed_abstract_state(pick_flawed_abstract_state),
       pick_split(pick_split),
       tiebreak_split(tiebreak_split),
@@ -111,7 +113,8 @@ void CartesianAbstractionGenerator::build_abstractions_for_subtasks(
             verify_transitions_debug,
             pick_flawed_abstract_state, pick_split, tiebreak_split,
             max_concrete_states_per_abstract_state, max_state_expansions,
-            transition_representation, *rng, log, dot_graph_verbosity);
+            transition_representation, goal_processing,
+            *rng, log, dot_graph_verbosity);
         cout << endl;
         auto cartesian_abstraction = cegar.extract_abstraction();
         // If the timer expired, the goal distances might only be lower bounds.
@@ -223,6 +226,7 @@ public:
             opts.get<int>("max_state_expansions"),
             opts.get<cartesian_abstractions::TransitionRepresentation>(
                 "transition_representation"),
+            opts.get<cartesian_abstractions::GoalProcessing>("goal_processing"),
             opts.get<int>("memory_padding"),
             utils::get_rng_arguments_from_options(opts),
             opts.get<cartesian_abstractions::DotGraphVerbosity>(

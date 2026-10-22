@@ -104,6 +104,15 @@ vector<int> CartesianSet::get_intersection_values(
     } return values;
 }
 
+void CartesianSet::intersect_var(const CartesianSet &other, int var) {
+    // inplace intersection
+    int begin = var_infos[var].block_index;
+    int end = begin + var_infos[var].num_blocks;
+    for (int b = begin; b < end; ++b) {
+        domains[b] &= other.domains[b];
+    }
+}
+
 bool CartesianSet::is_superset_of(const CartesianSet &other) const {
     for (int var = 0; var < get_num_variables(); ++var) {
         bool is_subset = other.get_view(var).is_subset_of(get_view(var));

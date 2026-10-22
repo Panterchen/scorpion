@@ -46,6 +46,7 @@ class CostSaturation {
     const int max_concrete_states_per_abstract_state;
     const int max_state_expansions;
     const TransitionRepresentation transition_representation;
+    const GoalProcessing goal_processing;
     const int memory_padding_mb;
     utils::RandomNumberGenerator &rng;
     utils::LogProxy &log;
@@ -79,6 +80,7 @@ public:
         PickSplit pick_split, PickSplit tiebreak_split,
         int max_concrete_states_per_abstract_state, int max_state_expansions,
         TransitionRepresentation transition_representation,
+        GoalProcessing goal_processing,
         int memory_padding_mb, utils::RandomNumberGenerator &rng,
         utils::LogProxy &log, DotGraphVerbosity dot_graph_verbosity);
 
