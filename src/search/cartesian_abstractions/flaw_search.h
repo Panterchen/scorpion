@@ -137,6 +137,10 @@ class FlawSearch {
         const AbstractState &target_abs_state, int op_id,
         std::vector<std::vector<Split>> &splits) const;
 
+    void get_goal_splits(
+        const AbstractState &abs_state, const std::vector<State> &states,
+        std::vector<std::vector<Split>> &splits) const;
+
     std::unique_ptr<Split> create_split(
         const std::vector<StateID> &state_ids, int abstract_state_id);
 

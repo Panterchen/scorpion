@@ -151,7 +151,8 @@ unique_ptr<Solution> ShortestPaths::extract_solution(
 
     int current_state = init_id;
     unique_ptr<Solution> solution = make_unique<Solution>();
-    assert(!goals.count(current_state));
+    // goals.count(current_state) happens if we do not greedily preprocess the
+    // goals.
     while (!goals.count(current_state)) {
         assert(!use_cache || !parents[current_state].empty());
         // Pick arbitrary parent if there are multiple parents.

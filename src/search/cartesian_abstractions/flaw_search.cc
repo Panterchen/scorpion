@@ -122,6 +122,18 @@ SearchStatus FlawSearch::step() {
     int abs_id = (*cached_abstract_state_ids)[s];
     assert(abs_id == get_abstract_state_id(s));
 
+    if (abstraction.get_goals().count(abs_id) &&
+        !task_properties::is_goal_state(task_proxy, s)) {
+        add_flaw(abs_id, s);
+        found_flaw = true;
+        if (log.is_at_least_debug()) {
+            log << "Goal Flaw on abs state #" << abs_id
+                << " in s = " << s.get_id() << endl;
+        }
+        if (pick_flawed_abstract_state == PickFlawedAbstractState::FIRST) {
+            return FAILED;
+        }
+    }
     // Check for each transition if the operator is applicable or if there is a
     // deviation.
     for (auto &pair : get_f_optimal_transitions(abs_id)) {
@@ -407,6 +419,70 @@ void FlawSearch::get_deviation_splits(
     }
 }
 
+void FlawSearch::get_goal_splits(
+    const AbstractState &abs_state, const std::vector<State> &states,
+    std::vector<std::vector<Split>> &splits) const {
+    /*
+      Goal Flaw: abs_state is an abstract goal state but the concrete states
+      are not goal states. For each goal fact g = (var, goal_value)
+      that is violated by some concrete state, we want to split off the
+      violating value from the goal value.
+
+      Basic variables: split (var, value) vs {goal_value}
+      Note: we treat derived variables the same (split only on the goal value)
+      and ignore dependencies on basic variables for now // TODO for later.
+    */
+    assert(abstraction.get_goals().count(abs_state.get_id()));
+    for (FactProxy goal : task_proxy.get_goals()) {
+        FactPair goal_fact = goal.get_pair();
+        int var = goal_fact.var;
+
+        vector<int> value_count(domain_sizes[var], 0);
+        for (const State &state : states) {
+            int value = state[var].get_value();
+            if (value != goal_fact.value) {
+                ++value_count[value];
+            }
+        }
+
+        bool is_derived = task_proxy.get_variables()[var].is_derived();
+        for (int value = 0; value < domain_sizes[var]; ++value) {
+            int count = value_count[value];
+            if (count == 0) {
+                continue;
+            }
+            assert(abs_state.contains(var, value));
+
+            if (!is_derived) {
+                assert(abs_state.contains(var, goal_fact.value));
+                add_split(
+                    splits,
+                    Split(abs_state.get_id(), var, value,
+                          {goal_fact.value}, count));
+                continue;
+            }
+
+            // Derived goal variable.
+            if (abs_state.get_cartesian_set().count(var) > 1 &&
+                abs_state.contains(var, goal_fact.value)) {
+                add_split(
+                    splits,
+                    Split(abs_state.get_id(), var, value,
+                          {goal_fact.value}, count));
+                } else {
+                    if (log.is_at_least_debug()) {
+                        log << "goal split on derived var=" << var
+                            << " not directly possible, fallback to base variables"
+                            << endl;
+                    }
+                    // TODO: check if this happens, if so, add the fallback logic
+                    // like in deviation flaws
+                }
+        }
+    }
+
+}
+
 // TODO: Add comment about split considering multiple transitions.
 unique_ptr<Split> FlawSearch::create_split(
     const vector<StateID> &state_ids, int abstract_state_id) {
@@ -420,8 +496,24 @@ unique_ptr<Split> FlawSearch::create_split(
             << " and " << state_ids.size() << " concrete states." << endl;
 	}
 
-
     vector<vector<Split>> splits(task_proxy.get_variables().size());
+
+    // Goal flaws: only relevant if the abstract state is a goal state.
+    if (abstraction.get_goals().count(abstract_state_id)) {
+        vector<State> non_goal_states;
+        non_goal_states.reserve(state_ids.size());
+        for (const StateID &state_id : state_ids) {
+            State state = state_registry->lookup_state(state_id);
+            assert(abstract_state.includes(state));
+            if (!task_properties::is_goal_state(task_proxy, state)) {
+                non_goal_states.push_back(state);
+            }
+        }
+        if (!non_goal_states.empty()) {
+            get_goal_splits(abstract_state, non_goal_states, splits);
+        }
+    }
+
     // (op, target) pairs with deviation flaw; cached if no split is found
     vector<StalledTransition> deviating_transitions;
     for (auto &pair : get_f_optimal_transitions(abstract_state_id)) {
@@ -562,6 +654,8 @@ unique_ptr<Split> FlawSearch::create_split(
     }
     compute_splits_timer.stop();
 
+    // TODO: can goal flaws lead to stalls -> theoretically not
+
     if (num_splits == 0) {
         stalled_transitions.insert(
             stalled_transitions.end(), deviating_transitions.begin(),
@@ -623,7 +717,7 @@ SearchStatus FlawSearch::search_for_flaws(
         log << "Flaw search expanded " << current_num_expanded_states
             << " states." << endl;
     }
-
+    // TODO: check if this still works with lazy goal splitting
     /* For MAX_H, we don't return SOLVED when hitting a goal state. So if MAX_H
        fails to find a single flaw, we adapt the search status here. */
     if (pick_flawed_abstract_state == PickFlawedAbstractState::MAX_H &&
@@ -714,7 +808,8 @@ unique_ptr<Split> FlawSearch::get_min_h_batch_split(
             assert(!task_properties::is_goal_state(task_proxy, state));
             int abs_id = get_abstract_state_id(state);
             if (get_h_value(abs_id) == old_h) {
-                add_flaw(abs_id, state); // TODO
+                // TODO (for goal flaws check again, if there is still a flaw)
+                add_flaw(abs_id, state);
             }
         }
     }

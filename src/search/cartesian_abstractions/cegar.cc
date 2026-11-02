@@ -232,7 +232,8 @@ void CEGAR::refinement_loop() {
 
       In any case, we separate all goal states from non-goal states
       to simplify the implementation. This way, we don't have to split
-      goal states later.
+      goal states later. (unless we choose GoalProcessing::LAZY, then
+      goal flaws are only fixed when encountered.
     */
     if (log.is_at_least_debug()) { // print goal facts in debug mode
         log << "Goal facts:" << endl;
@@ -245,6 +246,35 @@ void CEGAR::refinement_loop() {
     utils::Timer process_goals_timer(false);
     process_goals_timer.resume();
     preprocess_goals();
+    #ifndef NDEBUG
+        /*
+          Goal states are only split later (goal flaws) if the goals were not
+          separated at the start (lazy processing, or multiple goals with
+          greedy_single), or if a goal is on a derived variable, because the
+          abstract domain of a derived variable overapproximates its value.
+        */
+        bool goals_separated;
+        switch (goal_processing) {
+        case GoalProcessing::LAZY:
+            goals_separated = false;
+            break;
+        case GoalProcessing::GREEDY_SINGLE:
+            goals_separated = task_proxy.get_goals().size() == 1;
+            break;
+        case GoalProcessing::GREEDY:
+        default:
+            goals_separated = true;
+            break;
+        }
+        bool has_derived_goal = false;
+        for (FactProxy goal : task_proxy.get_goals()) {
+            if (goal.get_variable().is_derived()) {
+                has_derived_goal = true;
+                break;
+            }
+        }
+        const bool may_split_goal_states = !goals_separated || has_derived_goal;
+    #endif
     process_goals_timer.stop();
 
     // Initialize abstract goal distances and shortest path tree.
@@ -433,8 +463,9 @@ void CEGAR::refinement_loop() {
 
         refine_timer.resume();
         int state_id = split->abstract_state_id;
+        bool goal_split = abstraction->get_goals().count(state_id);
         const AbstractState &abstract_state = abstraction->get_state(state_id);
-        assert(!abstraction->get_goals().count(state_id));
+        assert(may_split_goal_states || !goal_split);
 
         pair<int, int> new_state_ids =
             abstraction->refine(abstract_state, split->var_id, split->values);
@@ -443,9 +474,13 @@ void CEGAR::refinement_loop() {
         dump_dot_graph();
 
         update_goal_distances_timer.resume();
-        shortest_paths->update_incrementally(
+        if (goal_split) {
+            shortest_paths->recompute(*abstraction, abstraction->get_goals());
+        } else {
+            shortest_paths->update_incrementally(
             *abstraction, state_id, new_state_ids.first, new_state_ids.second,
             split->var_id);
+        }
         update_goal_distances_timer.stop();
 
         if (log.is_at_least_verbose() &&
