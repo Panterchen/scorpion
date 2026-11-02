@@ -23,10 +23,13 @@ class VariableDependencies;
 class TransitionRewirer {
 
     const VariablesProxy vars;
+    const VariableHelper var_helper;
     std::unique_ptr<ExtensionStrategyInstance> extension_strategy_instance;
 
     const std::vector<std::vector<FactPair>> preconditions_by_operator;
     const std::vector<std::vector<FactPair>> postconditions_by_operator;
+    // derived precondition per operator
+    std::vector<std::vector<FactPair>> derived_pre_per_op;
 
     const std::shared_ptr<const VariableDependencies> variable_dependencies;
 

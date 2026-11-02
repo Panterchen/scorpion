@@ -47,13 +47,21 @@ TransitionRewirer::TransitionRewirer(const TaskProxy &task,
     const std::shared_ptr<ExtensionStrategy> &extension_strategy,
     const std::shared_ptr<const VariableDependencies> &variable_dependencies,
     bool verify_transitions_debug)
-    : vars(task.get_variables()),
+    : vars(task.get_variables()), var_helper(vars),
     extension_strategy_instance(extension_strategy->create(task)),
     preconditions_by_operator(compute_preconditions_by_operator(task.get_operators())),
     postconditions_by_operator(compute_postconditions_by_operator(task.get_operators())),
     variable_dependencies(variable_dependencies),
     verify_transitions_debug(verify_transitions_debug),
     task_has_axioms(task_properties::has_axioms(task)) {
+    derived_pre_per_op.resize(preconditions_by_operator.size());
+    for (size_t op = 0; op < preconditions_by_operator.size(); ++op) {
+        for (const FactPair &p : preconditions_by_operator[op]) {
+            if (var_helper.is_derived[p.var]) {
+                derived_pre_per_op[op].push_back(p);
+            }
+        }
+    }
 }
 
 void TransitionRewirer::rewire_transitions(
@@ -98,6 +106,11 @@ void TransitionRewirer::rewire_incoming_transitions(
         }
     }
 
+    // flag if var is derived or if any derived variables depend on it
+    bool derived = var_helper.is_derived[var] ;
+    bool derived_dependent =
+        !variable_dependencies->get_transitive_dependents(var).empty();
+
     for (const Transition &transition : old_incoming) {
         
         int op_id = transition.op_id;
@@ -109,9 +122,6 @@ void TransitionRewirer::rewire_incoming_transitions(
         bool added_u_v2 = false;
 
         int post = UNDEFINED;
-        // flag if var is derived or if any derived variables depend on it
-        bool derived = vars[var].is_derived() ;
-        bool derived_dependent = !variable_dependencies->get_transitive_dependents(var).empty();
 
         // Lazy memoized version of checking for derived conflicts:
         optional<bool> conflict_v1_cache, conflict_v2_cache;
@@ -242,6 +252,10 @@ void TransitionRewirer::rewire_outgoing_transitions(
         }
     }
 
+    bool derived = var_helper.is_derived[var]; // check if var is derived
+    bool derived_dependent =
+        !variable_dependencies->get_transitive_dependents(var).empty();
+
     for (const Transition &transition : old_outgoing) {
         int op_id = transition.op_id;
         int w_id = transition.target_id;
@@ -253,9 +267,6 @@ void TransitionRewirer::rewire_outgoing_transitions(
 
         int pre = get_precondition_value(op_id, var);
         int post = get_postcondition_value(op_id, var);
-        
-        bool derived = vars[var].is_derived(); // check if var is derived
-        bool derived_dependent = !variable_dependencies->get_transitive_dependents(var).empty();
 
         // Lazy memoized calculation of derived conflict on either v1, v2
         // if v1 or v2 have an inapplicability conflict with a derived precondition variable
@@ -417,6 +428,9 @@ void TransitionRewirer::rewire_loops(
 
     int v1_id = v1.get_id();
     int v2_id = v2.get_id();
+    bool derived = var_helper.is_derived[var]; // check if var is derived
+    bool derived_dependent =
+        !variable_dependencies->get_transitive_dependents(var).empty();
     for (int op_id : old_loops) {
         bool added_loop_v1 = false;
         bool added_loop_v2 = false;
@@ -426,8 +440,6 @@ void TransitionRewirer::rewire_loops(
         int pre = get_precondition_value(op_id, var);
 
         int post = UNDEFINED;
-        bool derived = vars[var].is_derived(); // check if var is derived
-        bool derived_dependent = !variable_dependencies->get_transitive_dependents(var).empty();
 
         if (!derived) {
             post = get_postcondition_value(op_id, var);
@@ -696,40 +708,55 @@ int TransitionRewirer::get_num_operators() const {
 }
 
 CartesianSet TransitionRewirer::update_cartesian_set(const CartesianSet &a, int op_id) const {
-    CartesianSet result = a;   
     // update cartesian set with operator postconditions
-    for (VariableProxy var : vars){
-        if (var.is_derived()){
-            result.add_all(var.get_id());
-        } else if (get_postcondition_value(op_id, var.get_id()) != UNDEFINED){
-            // post condition is the only value for var that can be true after applying operator
-            result.set_single_value(var.get_id(), get_postcondition_value(op_id, var.get_id()));
+    CartesianSet result = a;
+    // derived variables get "reset" when op is applied
+    for (int d : var_helper.derived_vars) {
+        result.add_all(d);
+    }
+    // basic variables: determined by update via postconditions
+    for (const FactPair &p : postconditions_by_operator[op_id]) {
+        if (!var_helper.is_derived[p.var]) {
+            result.set_single_value(p.var, p.value);
         }
     }
+
+    // for (VariableProxy var : vars){
+    //     if (var.is_derived()){
+    //         result.add_all(var.get_id());
+    //     } else if (get_postcondition_value(op_id, var.get_id()) != UNDEFINED){
+    //         // post condition is the only value for var that can be true after applying operator
+    //         result.set_single_value(var.get_id(), get_postcondition_value(op_id, var.get_id()));
+    //     }
+    // }
     return result;
 }
 
 CartesianSet TransitionRewirer::intersect_cartesian_sets_on_basics(const CartesianSet &a,
     const CartesianSet &b) const {
     CartesianSet result = a;
-    for (VariableProxy var : vars) {
-        if (!var.is_derived()) {
-            vector<int> values = a.get_intersection_values(b, var.get_id());
-            result.remove_all(var.get_id());
-            for (int val : values) {
-                result.add(var.get_id(), val);
-            }
-        }
-    }
+    // for (VariableProxy var : vars) {
+    //     if (!var.is_derived()) {
+    //         vector<int> values = a.get_intersection_values(b, var.get_id());
+    //         result.remove_all(var.get_id());
+    //         for (int val : values) {
+    //             result.add(var.get_id(), val);
+    //         }
+    //     }
+    // }
+    intersect_on_basics_inplace(result, b);
     return result;
 }
 
 void TransitionRewirer::intersect_on_basics_inplace(
     CartesianSet &a, const CartesianSet &b) const {
-    for (VariableProxy v : vars) {
-        if (!v.is_derived()) {
-            a.intersect_var(b, v.get_id()); // TODO
-        }
+    // for (VariableProxy v : vars) {
+    //     if (!v.is_derived()) {
+    //         a.intersect_var(b, v.get_id()); // TODO
+    //     }
+    // }
+    for (int v : var_helper.basic_vars) {
+        a.intersect_var(b, v);
     }
 }
 
@@ -741,7 +768,7 @@ bool TransitionRewirer::conflict_derived_domains(
     if (!task_has_axioms) {
         return false;
     }
-    if (!vars[var_id].is_derived() && get_var_dependencies(var_id).second.empty()) {
+    if (!var_helper.is_derived[var_id] && get_var_dependencies(var_id).second.empty()) {
          return false;
     }
 
@@ -750,7 +777,7 @@ bool TransitionRewirer::conflict_derived_domains(
     intersect_on_basics_inplace(a_updated, b);
 
     CartesianSet extended_a_o = extension_strategy_instance->get_extension(a_updated);
-    if (vars[var_id].is_derived()) {  // split variable is derived, check conflict for the variable
+    if (var_helper.is_derived[var_id]) { // split variable is derived, check conflict for the variable
         if (!extended_a_o.intersects(b, var_id)) {
             return true;
         }
@@ -758,10 +785,21 @@ bool TransitionRewirer::conflict_derived_domains(
     for (int var : variable_dependencies->get_transitive_dependents(var_id)) {
         // iterate over all variables appearing in the head of an axiom with var_id in the body
         // check conflict for all these variables affected by the split
-        if (vars[var].is_derived() && !extended_a_o.intersects(b, var)) {
+        if (var_helper.is_derived[var] && !extended_a_o.intersects(b, var)) {
             return true;
         }
     }
+    // if (vars[var_id].is_derived()) {
+    //     if (!extended_a_o.intersects(b, var_id)) {
+    //         return true;
+    //     }
+    // }
+    // for (int var : variable_dependencies->get_transitive_dependents(var_id)) {
+    //
+    //     if (vars[var].is_derived() && !extended_a_o.intersects(b, var)) {
+    //         return true;
+    //     }
+    // }
     return false;   
 }
 
@@ -776,32 +814,44 @@ bool TransitionRewirer::precondition_derived_conflict(
     if (!task_has_axioms) {
         return false;
     }
-    // check if operator has derived preconditions and if the derived variables
-    // in these preconditions depend on the split variable
-    bool has_derived_pre = false;
-    vector<int> aff_vars = variable_dependencies->get_transitive_dependents(var_id);
-    vector<FactPair> der_pre;
-    for (const FactPair &pre : preconditions_by_operator[op_id]) {
-        if (vars[pre.var].is_derived() && find(aff_vars.begin(), aff_vars.end(), pre.var) != aff_vars.end()) {
-            der_pre.push_back(pre);
-            has_derived_pre = true;
-        }
+    const vector<FactPair> &der_pre = derived_pre_per_op[op_id];
+    if (der_pre.empty()) {
+        return false; // no derived preconditions
     }
-    // Fast Path for op without preconditions on derived variables
-    if (!has_derived_pre) {
-        return false;
-    }
-
-    // Technically we need to test against the extension to see if the precondition
-    // value is allowed inside extension, but since we already use consistency
-    // check as pre-filter before every reaching this point, it is sufficient to
-    // check against the original set. This will possibly introduce some
-    // applicability flaws, but they can be filtered out easily.
+    const vector<int> &aff_vars = variable_dependencies->get_transitive_dependents(var_id);
     for (const FactPair &pre : der_pre) {
-        if (!a.test(pre.var, pre.value)) {
+        if (binary_search(aff_vars.begin(), aff_vars.end(), pre.var)
+            && !a.test(pre.var, pre.value)) {
             return true;
         }
     }
+    //
+    // // check if operator has derived preconditions and if the derived variables
+    // // in these preconditions depend on the split variable
+    // bool has_derived_pre = false;
+    // vector<int> aff_vars = variable_dependencies->get_transitive_dependents(var_id);
+    // vector<FactPair> der_pre;
+    // for (const FactPair &pre : preconditions_by_operator[op_id]) {
+    //     if (vars[pre.var].is_derived() && find(aff_vars.begin(), aff_vars.end(), pre.var) != aff_vars.end()) {
+    //         der_pre.push_back(pre);
+    //         has_derived_pre = true;
+    //     }
+    // }
+    // // Fast Path for op without preconditions on derived variables
+    // if (!has_derived_pre) {
+    //     return false;
+    // }
+    //
+    // // Technically we need to test against the extension to see if the precondition
+    // // value is allowed inside extension, but since we already use consistency
+    // // check as pre-filter before every reaching this point, it is sufficient to
+    // // check against the original set. This will possibly introduce some
+    // // applicability flaws, but they can be filtered out easily.
+    // for (const FactPair &pre : der_pre) {
+    //     if (!a.test(pre.var, pre.value)) {
+    //         return true;
+    //     }
+    // }
     return false;
 }
 
@@ -820,26 +870,27 @@ std::pair<bool, bool> TransitionRewirer::consistency_check(
     // b) has derived variables depending on it.
     // We assume that previously discovered inconsistent states get disconnected
     // from the transition systems and are never split themselves.
-    bool derived_dep = vars[var].is_derived() || !variable_dependencies->get_transitive_dependents(var).empty();
+    bool derived_dep = var_helper.is_derived[var] ||
+        !variable_dependencies->get_transitive_dependents(var).empty();
     if (!task_has_axioms || !derived_dep) {
         return make_pair(true, true);
     }
 
     bool v1_consistent = true;
     bool v2_consistent = true;
-    std::vector< int > derived_vars;
-    for (VariableProxy var : vars) {
-        if (var.is_derived()) {
-            derived_vars.push_back(var.get_id());
-        }
-    }
-    if (!derived_vars.empty()) {
+    // std::vector< int > derived_vars;
+    // for (VariableProxy var : vars) {
+    //     if (var.is_derived()) {
+    //         derived_vars.push_back(var.get_id());
+    //     }
+    // }
+    if (!var_helper.derived_vars.empty()) {
         // validate the consistency of v1 and v2 w.r.t. to derived variables
         CartesianSet ext_v1 = extension_strategy_instance->get_precise_extension(v1.get_cartesian_set());
         CartesianSet ext_v2 = extension_strategy_instance->get_precise_extension(v2.get_cartesian_set());
         std::vector<int> v1_empty_dom;
         std::vector<int> v2_empty_dom;
-        for (int var : derived_vars) {
+        for (int var : var_helper.derived_vars) {
             if (ext_v1.get_values(var).empty()) {
                 v1_consistent = false;
                 v1_empty_dom.push_back(var);

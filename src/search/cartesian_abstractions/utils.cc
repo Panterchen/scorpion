@@ -27,6 +27,22 @@ class SubtaskGenerator;
 class ExtensionStrategy;
 class RegressionStrategy;
 
+VariableHelper::VariableHelper(const VariablesProxy &vars) {
+    int num_vars = vars.size();
+    is_derived.assign(num_vars, 0);
+    fact_offset.assign(num_vars + 1, 0);
+    int num_facts = 0;
+    for (VariableProxy var : vars) {
+        int id = var.get_id();
+        is_derived[id] = var.is_derived();
+        (var.is_derived() ? derived_vars : basic_vars).push_back(id);
+        fact_offset[id] = num_facts;
+        num_facts += var.get_domain_size();
+    }
+    fact_offset[num_vars] = num_facts;
+    assert(basic_vars.size() + derived_vars.size() == vars.size());
+}
+
 VariableDependencies::VariableDependencies(const TaskProxy &task)
     : vars(task.get_variables()) {
     int num_vars = vars.size();

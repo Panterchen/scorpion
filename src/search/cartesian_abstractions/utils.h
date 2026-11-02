@@ -36,6 +36,19 @@ struct AxiomSplitTarget {
     auto operator<=>(const AxiomSplitTarget &) const = default;
 };
 
+struct VariableHelper {
+    std::vector<int> basic_vars;    // basic var ids, asc order
+    std::vector<int> derived_vars;  // derived var ids, asc order
+    std::vector<char> is_derived;   // idx var_id
+    std::vector<int> fact_offset;   // fact_id = fact_offset[var] + value
+
+    explicit VariableHelper(const VariablesProxy &vars);
+
+    int num_facts() const {
+        return fact_offset.back();
+    }
+};
+
 class Abstraction;
 
 class VariableDependencies {
