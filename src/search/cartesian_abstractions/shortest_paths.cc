@@ -336,10 +336,47 @@ void ShortestPaths::update_incrementally(
         return !s.dirty || s.goal_distance == INF_COSTS;
     }));
 
-    states[v1].dirty_candidate = true;
-    states[v2].dirty_candidate = true;
-    candidate_queue.push(states[v1].goal_distance, v1);
-    candidate_queue.push(states[v2].goal_distance, v2);
+    /*
+        If v was a goal state (goal flaw), a child that is still a goal state
+        keeps h=0, has no SPT parent, and must never become dirty. It is not a
+        candidate. A child that is no longer a goal state inherited h=0 from v,
+        which is wrong in general, so it stays a candidate and gets recomputed
+        (it has no parent to reconnect to).
+     */
+
+    for (int child : {v1, v2}) {
+        if (abstraction.get_goals().count(child)) {
+            continue;
+        }
+        states[child].dirty_candidate = true;
+        candidate_queue.push(states[child].goal_distance, child);
+    }
+
+    if (!use_cache) {
+        for (int u = 0; u < num_states; ++u) {
+            if (u == v1 || u == v2 || states[u].dirty_candidate ||
+                states[u].goal_distance == INF_COSTS ||
+                abstraction.get_goals().count(u)) {
+                continue;
+                }
+            const Transition &p = parent[u];
+            if (!p.is_defined() ||
+                (p.target_id != v1 && p.target_id != v2)) {
+                continue;
+                }
+            Transitions out = abstraction.get_outgoing_transitions(u);
+            if (find(out.begin(), out.end(), p) == out.end()) {
+                states[u].dirty_candidate = true;
+                candidate_queue.push(states[u].goal_distance, u);
+            }
+        }
+    }
+
+    // old version that does not support goal flaw splitting:
+    // states[v1].dirty_candidate = true;
+    // states[v2].dirty_candidate = true;
+    // candidate_queue.push(states[v1].goal_distance, v1);
+    // candidate_queue.push(states[v2].goal_distance, v2);
 
     while (!candidate_queue.empty()) {
         int state = candidate_queue.pop().second;

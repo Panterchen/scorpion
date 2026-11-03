@@ -474,13 +474,16 @@ void CEGAR::refinement_loop() {
         dump_dot_graph();
 
         update_goal_distances_timer.resume();
-        if (goal_split) {
-            shortest_paths->recompute(*abstraction, abstraction->get_goals());
-        } else {
-            shortest_paths->update_incrementally(
+        shortest_paths->update_incrementally(
             *abstraction, state_id, new_state_ids.first, new_state_ids.second,
             split->var_id);
-        }
+        // if (goal_split) {
+        //     shortest_paths->recompute(*abstraction, abstraction->get_goals());
+        // } else {
+        //     shortest_paths->update_incrementally(
+        //     *abstraction, state_id, new_state_ids.first, new_state_ids.second,
+        //     split->var_id);
+        // }
         update_goal_distances_timer.stop();
 
         if (log.is_at_least_verbose() &&
