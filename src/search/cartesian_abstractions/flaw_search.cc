@@ -21,6 +21,7 @@
 #include "../utils/rng.h"
 
 #include <bits/locale_facets_nonio.h>
+#include <algorithm>
 
 using namespace std;
 
@@ -55,7 +56,8 @@ void FlawSearch::add_flaw(int abs_id, const State &state) {
     }
 
     Cost h = get_h_value(abs_id);
-    if (pick_flawed_abstract_state == PickFlawedAbstractState::MIN_H) {
+    if (pick_flawed_abstract_state == PickFlawedAbstractState::MIN_H &&
+        !retry_on_stall) {
         if (best_flaw_h > h) {
             flawed_states.clear();
         }
@@ -63,7 +65,8 @@ void FlawSearch::add_flaw(int abs_id, const State &state) {
             best_flaw_h = h;
             flawed_states.add_state(abs_id, state, h);
         }
-    } else if (pick_flawed_abstract_state == PickFlawedAbstractState::MAX_H) {
+    } else if (pick_flawed_abstract_state == PickFlawedAbstractState::MAX_H &&
+        !retry_on_stall) {
         if (best_flaw_h < h) {
             flawed_states.clear();
         }
@@ -73,6 +76,7 @@ void FlawSearch::add_flaw(int abs_id, const State &state) {
         }
     } else {
         assert(
+            retry_on_stall ||
             pick_flawed_abstract_state == PickFlawedAbstractState::RANDOM ||
             pick_flawed_abstract_state == PickFlawedAbstractState::FIRST ||
             pick_flawed_abstract_state == PickFlawedAbstractState::BATCH_MIN_H);
@@ -669,6 +673,17 @@ unique_ptr<Split> FlawSearch::create_split(
     return make_unique<Split>(move(split));
 }
 
+std::unique_ptr<Split> FlawSearch::split_or_stall(
+    const std::vector<StateID> &state_ids, int abstract_state_id) {
+    unique_ptr<Split> split = create_split(state_ids, abstract_state_id);
+    if (!split) {
+        last_stop_reason = utils::extra_memory_padding_is_reserved()
+                               ? StopReason::REFINEMENT_STALLED
+                               : StopReason::MEMORY_LIMIT;
+    }
+    return split;
+}
+
 FlawedState FlawSearch::get_next_usable_flawed_state(
     std::unordered_set<int> unsplittable_abstract_states) {
     FlawedState flawed_state = get_flawed_state_with_min_h();
@@ -741,6 +756,10 @@ unique_ptr<Split> FlawSearch::get_single_split(
     if (search_status == FAILED) {
         assert(!flawed_states.empty());
 
+        if (retry_on_stall) {
+            return get_single_split_with_retries();
+        }
+
         FlawedState flawed_state =
             flawed_states.pop_random_flawed_state_and_clear(rng);
         StateID state_id = *rng.choose(flawed_state.concrete_states);
@@ -768,6 +787,52 @@ unique_ptr<Split> FlawSearch::get_single_split(
     }
     assert(search_status == SOLVED);
     last_stop_reason = StopReason::SOLVED;
+    return nullptr;
+}
+std::unique_ptr<Split> FlawSearch::get_single_split_with_retries() {
+    assert(retry_on_stall);
+    /*
+        Without precise extension, create_split may fail for a flawed abstract
+        state in tasks with axioms (approximated regression over derived
+        variables). Instead of giving up, try the other collected flaws.
+
+        Order: uniformly random, so the first candidate is distributed like the
+        pick of pop_random_flawed_state_and_clear. For min_h/max_h, stable sort
+        by h (ties stay random). For each candidate, we first try one random
+        concrete state (as in the variant without retries) and then all concrete
+        states of the abstract state.
+     */
+    vector<FlawedState> candidates;
+    while (!flawed_states.empty()) {
+        candidates.push_back(flawed_states.pop_flawed_state_with_min_h());
+    }
+    rng.shuffle(candidates);
+    if (pick_flawed_abstract_state == PickFlawedAbstractState::MIN_H) {
+        stable_sort(candidates.begin(), candidates.end(),
+            [](const FlawedState &a, const FlawedState &b) {return a.h < b.h;});
+    } else if (pick_flawed_abstract_state == PickFlawedAbstractState::MAX_H) {
+        stable_sort(candidates.begin(), candidates.end(),
+            [](const FlawedState &a, const FlawedState &b) {return a.h > b.h;});
+    }
+    for (const FlawedState &candidate : candidates) {
+        if (log.is_at_least_debug()) {
+            log << "Try flawed state: " << candidate << endl;
+        }
+        StateID state_id = *rng.choose(candidate.concrete_states);
+        unique_ptr<Split> split = create_split({state_id}, candidate.abs_id);
+        if (!split && candidate.concrete_states.size() > 1) {
+            split = create_split(candidate.concrete_states, candidate.abs_id);
+        }
+        if (!utils::extra_memory_padding_is_reserved()) {
+            last_stop_reason = StopReason::MEMORY_LIMIT;
+            return nullptr;
+        }
+        if (split) {
+            return split;
+        }
+    }
+    // stalled_transitions were collected by create_split.
+    last_stop_reason = StopReason::REFINEMENT_STALLED;
     return nullptr;
 }
 
@@ -901,6 +966,8 @@ FlawSearch::FlawSearch(
     const shared_ptr<const VariableDependencies> &variable_dependencies,
     const utils::LogProxy &log)
     : task_proxy(*task),
+      retry_on_stall(task_properties::has_axioms(task_proxy) &&
+          !extension_strategy->supports_precise_checks()),
       domain_sizes(get_domain_sizes(task_proxy)),
       abstraction(abstraction),
       shortest_paths(shortest_paths),
@@ -951,6 +1018,7 @@ unique_ptr<Split> FlawSearch::get_split(
 
     if (split) {
         assert(
+            retry_on_stall ||
             (pick_flawed_abstract_state != PickFlawedAbstractState::MAX_H &&
              pick_flawed_abstract_state != PickFlawedAbstractState::MIN_H) ||
             best_flaw_h == get_h_value(split->abstract_state_id));
@@ -958,7 +1026,10 @@ unique_ptr<Split> FlawSearch::get_split(
     return split;
 }
 
+
 unique_ptr<Split> FlawSearch::get_split_legacy(const Solution &solution) {
+    last_stop_reason = StopReason::NONE;
+    stalled_transitions.clear();
     state_registry = make_unique<StateRegistry>(task_proxy);
     bool debug = log.is_at_least_debug();
     if (debug)
@@ -984,27 +1055,28 @@ unique_ptr<Split> FlawSearch::get_split_legacy(const Solution &solution) {
             if (!next_abstract_state->includes(next_concrete_state)) {
                 if (debug)
                     log << "  Paths deviate." << endl;
-                return create_split(
-                    {concrete_state.get_id()}, abstract_state->get_id());
+                return split_or_stall({concrete_state.get_id()},
+                    abstract_state->get_id());
             }
             abstract_state = next_abstract_state;
             concrete_state = move(next_concrete_state);
         } else {
             if (debug)
                 log << "  Operator not applicable: " << op.get_name() << endl;
-            return create_split(
-                {concrete_state.get_id()}, abstract_state->get_id());
+            return split_or_stall({concrete_state.get_id()},
+            abstract_state->get_id());
         }
     }
     assert(abstraction.get_goals().count(abstract_state->get_id()));
     if (task_properties::is_goal_state(task_proxy, concrete_state)) {
         // We found a concrete solution.
+        last_stop_reason = StopReason::SOLVED;
         return nullptr;
     } else {
         if (debug)
             log << "  Goal test failed." << endl;
-        return create_split(
-            {concrete_state.get_id()}, abstract_state->get_id());
+        return split_or_stall({concrete_state.get_id()},
+            abstract_state->get_id());
     }
 }
 

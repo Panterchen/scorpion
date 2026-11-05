@@ -71,6 +71,7 @@ struct StalledTransition {
 
 class FlawSearch {
     TaskProxy task_proxy;
+    const bool retry_on_stall;
     const std::vector<int> domain_sizes;
     const Abstraction &abstraction;
     const ShortestPaths &shortest_paths;
@@ -143,6 +144,8 @@ class FlawSearch {
 
     std::unique_ptr<Split> create_split(
         const std::vector<StateID> &state_ids, int abstract_state_id);
+    std::unique_ptr<Split> split_or_stall(
+    const std::vector<StateID> &state_ids, int abstract_state_id);
 
     FlawedState get_next_usable_flawed_state(
         std::unordered_set<int> unsplittable_abstract_states);
@@ -150,6 +153,7 @@ class FlawSearch {
     FlawedState get_flawed_state_with_min_h();
     std::unique_ptr<Split> get_single_split(
         const utils::CountdownTimer &cegar_timer);
+    std::unique_ptr<Split> get_single_split_with_retries();
     std::unique_ptr<Split> get_min_h_batch_split(
         const utils::CountdownTimer &cegar_timer);
 

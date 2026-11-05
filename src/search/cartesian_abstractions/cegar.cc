@@ -54,16 +54,33 @@ CEGAR::CEGAR(
       log(log),
       dot_graph_verbosity(dot_graph_verbosity) {
     assert(max_states >= 1);
-    if (task_properties::has_axioms(task_proxy) &&
-        prune_non_induced_transitions &&
-        (transition_representation != TransitionRepresentation::STORE ||
-        pick_flawed_abstract_state ==
-        PickFlawedAbstractState::FIRST_ON_SHORTEST_PATH)) {
-        log << "Pruning non-induced transitions (hybrid extension) requires "
-               "transition_representation=store and a pick_flawed_abstract_state "
-               "other than first_on_shortest_path." << endl;
-        utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
+    if (task_properties::has_axioms(task_proxy)) {
+        // &&
+        // prune_non_induced_transitions &&
+        // (transition_representation != TransitionRepresentation::STORE ||
+        // pick_flawed_abstract_state ==
+        // PickFlawedAbstractState::FIRST_ON_SHORTEST_PATH)) {
+        // log << "Pruning non-induced transitions (hybrid extension) requires "
+        //        "transition_representation=store and a pick_flawed_abstract_state "
+        //        "other than first_on_shortest_path." << endl;
+        if (transition_representation != TransitionRepresentation::STORE) {
+            log << "Tasks with axioms are only supported for "
+                   "transition_representation=store." << endl;
+            utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
+        }
+        if (pick_split == PickSplit::MAX_CG || pick_split == PickSplit::MIN_CG
+            || pick_split == PickSplit::MIN_HADD || pick_split == PickSplit::MAX_HADD
+            || tiebreak_split == PickSplit::MAX_CG || tiebreak_split == PickSplit::MIN_CG
+            || tiebreak_split == PickSplit::MIN_HADD || tiebreak_split == PickSplit::MAX_HADD) {
+            log << "The split selectors min_cg and max_cg are not "
+               "supported for tasks with axioms. Please choose another "
+               "pick_split/tiebreak_split strategy." << endl;
+            utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
+        }
     }
+
+
+
     int max_cached_spt_parents =
         (transition_representation == TransitionRepresentation::STORE)
             ? 0
