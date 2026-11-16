@@ -888,17 +888,19 @@ std::pair<bool, bool> TransitionRewirer::consistency_check(
         // validate the consistency of v1 and v2 w.r.t. to derived variables
         CartesianSet ext_v1 = extension_strategy_instance->get_precise_extension(v1.get_cartesian_set());
         CartesianSet ext_v2 = extension_strategy_instance->get_precise_extension(v2.get_cartesian_set());
-        std::vector<int> v1_empty_dom;
-        std::vector<int> v2_empty_dom;
+        // std::vector<int> v1_empty_dom;
+        // std::vector<int> v2_empty_dom;
         for (int var : var_helper.derived_vars) {
-            if (ext_v1.get_values(var).empty()) {
-                v1_consistent = false;
-                v1_empty_dom.push_back(var);
-            }
-            if (ext_v2.get_values(var).empty()) {
-                v2_consistent = false;
-                v2_empty_dom.push_back(var);
-            }
+            if (ext_v1.count(var) == 0) v1_consistent = false;
+            if (ext_v2.count(var) == 0) v2_consistent = false;
+            // if (ext_v1.get_values(var).empty()) {
+            //     v1_consistent = false;
+            //     v1_empty_dom.push_back(var);
+            // }
+            // if (ext_v2.get_values(var).empty()) {
+            //     v2_consistent = false;
+            //     v2_empty_dom.push_back(var);
+            // }
         }
     }
 

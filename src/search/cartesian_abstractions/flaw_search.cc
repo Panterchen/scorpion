@@ -116,8 +116,10 @@ SearchStatus FlawSearch::step() {
     node.close();
     assert(!node.is_dead_end());
     ++num_overall_expanded_concrete_states;
+    bool is_goal = task_properties::is_goal_state(task_proxy, s);
 
-    if (task_properties::is_goal_state(task_proxy, s) &&
+    if (is_goal &&
+    // if (task_properties::is_goal_state(task_proxy, s) &&
         pick_flawed_abstract_state != PickFlawedAbstractState::MAX_H) {
         return SOLVED;
     }
@@ -126,8 +128,8 @@ SearchStatus FlawSearch::step() {
     int abs_id = (*cached_abstract_state_ids)[s];
     assert(abs_id == get_abstract_state_id(s));
 
-    if (abstraction.get_goals().count(abs_id) &&
-        !task_properties::is_goal_state(task_proxy, s)) {
+    if (abstraction.get_goals().count(abs_id) && !is_goal) {
+        // !task_properties::is_goal_state(task_proxy, s)) {
         add_flaw(abs_id, s);
         found_flaw = true;
         if (log.is_at_least_debug()) {
@@ -520,6 +522,12 @@ unique_ptr<Split> FlawSearch::create_split(
 
     // (op, target) pairs with deviation flaw; cached if no split is found
     vector<StalledTransition> deviating_transitions;
+    vector<State> states;
+    states.reserve(state_ids.size());
+    for (const StateID &state_id : state_ids) {
+        states.push_back(state_registry->lookup_state(state_id));
+        assert(abstract_state.includes(states.back()));
+    }
     for (auto &pair : get_f_optimal_transitions(abstract_state_id)) {
         int op_id = pair.first;
         const vector<int> &targets = pair.second;
@@ -534,12 +542,12 @@ unique_ptr<Split> FlawSearch::create_split(
             log << "op_id=" << op_id << " #targets=" << targets.size() << " targets=" << targets << endl;
         }
 
-        vector<State> states;
-        states.reserve(state_ids.size());
-        for (const StateID &state_id : state_ids) {
-            states.push_back(state_registry->lookup_state(state_id));
-            assert(abstract_state.includes(states.back()));
-        }
+        // vector<State> states;
+        // states.reserve(state_ids.size());
+        // for (const StateID &state_id : state_ids) {
+        //     states.push_back(state_registry->lookup_state(state_id));
+        //     assert(abstract_state.includes(states.back()));
+        // }
 
         vector<bool> applicable(states.size(), true);
         for (FactPair fact : abstraction.get_preconditions(op_id)) {
@@ -685,7 +693,7 @@ std::unique_ptr<Split> FlawSearch::split_or_stall(
 }
 
 FlawedState FlawSearch::get_next_usable_flawed_state(
-    std::unordered_set<int> unsplittable_abstract_states) {
+    std::unordered_set<int> &unsplittable_abstract_states) {
     FlawedState flawed_state = get_flawed_state_with_min_h();
     while (flawed_state != FlawedState::no_state  &&
         unsplittable_abstract_states.contains(flawed_state.abs_id)) {

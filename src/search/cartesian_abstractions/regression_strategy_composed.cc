@@ -33,21 +33,21 @@ void RegressionStrategyComposedInstance::prepare(
      * get_wanted_values() queries for that transition.
      */
     CartesianSet naive_regression = naive_instance.get_regression(t, op_id);
-    // TODO: remove after debugging
-    for (VariableProxy var: variables) {
-        if (naive_regression.get_values(var.get_id()).empty()) {
-            cout<<"WARNING: "<<var.get_id()<<"'s domain is empty after naive regression"<<endl;
-        }
-    }
+    // // TODO: remove after debugging
+    // for (VariableProxy var: variables) {
+    //     if (naive_regression.get_values(var.get_id()).empty()) {
+    //         cout<<"WARNING: "<<var.get_id()<<"'s domain is empty after naive regression"<<endl;
+    //     }
+    // }
     cached_extended_regression =
-        extension_instance->get_extension(naive_regression);
-    // TODO: remove after debugging
-    CartesianSet extSet = cached_extended_regression.value();
-    for (VariableProxy var: variables) {
-        if (extSet.get_values(var.get_id()).empty()) {
-            cout<<"WARNING: "<<var.get_id()<<"'s domain is empty after extended regression"<<endl;
-        }
-    }
+        extension_instance->get_precise_extension(naive_regression);
+    // // TODO: remove after debugging
+    // CartesianSet extSet = cached_extended_regression.value();
+    // for (VariableProxy var: variables) {
+    //     if (extSet.get_values(var.get_id()).empty()) {
+    //         cout<<"WARNING: "<<var.get_id()<<"'s domain is empty after extended regression"<<endl;
+    //     }
+    // }
 }
 
 CartesianSet RegressionStrategyComposedInstance::get_regression(
@@ -103,18 +103,18 @@ vector<int> RegressionStrategyComposedInstance::get_wanted_values(
             wanted.push_back(v);
         }
     }
-    if (wanted.empty()) {
-        CartesianSet ext_a = extension_instance->get_extension(a.get_cartesian_set());
-        std::cout << "Abstract State ID: " << a.get_id() << ", " << a.get_cartesian_set() << std::endl;
-        std::cout << "No wanted values found for var " << variable << std::endl;
-        std::cout << "var domain in a: " << a.get_cartesian_set().get_values(variable) << std::endl;
-        if (ext_a.get_values(variable).empty()) {
-            std::cout << "var domain in ext_a is empty." << std::endl;
-        } else {
-            std::cout << "var domain in ext_a: " << extension_instance->get_extension(a.get_cartesian_set()).get_values(variable) << std::endl;
-        }
-        std::cout << "var domain in ext_regr: " << ext_regr.get_values(variable) << std::endl;
-    }
+    // if (wanted.empty()) {
+    //     CartesianSet ext_a = extension_instance->get_extension(a.get_cartesian_set());
+    //     std::cout << "Abstract State ID: " << a.get_id() << ", " << a.get_cartesian_set() << std::endl;
+    //     std::cout << "No wanted values found for var " << variable << std::endl;
+    //     std::cout << "var domain in a: " << a.get_cartesian_set().get_values(variable) << std::endl;
+    //     if (ext_a.get_values(variable).empty()) {
+    //         std::cout << "var domain in ext_a is empty." << std::endl;
+    //     } else {
+    //         std::cout << "var domain in ext_a: " << extension_instance->get_extension(a.get_cartesian_set()).get_values(variable) << std::endl;
+    //     }
+    //     std::cout << "var domain in ext_regr: " << ext_regr.get_values(variable) << std::endl;
+    // }
     return wanted;
 }
 

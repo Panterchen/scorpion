@@ -76,10 +76,12 @@ vector<int> RegressionStrategyNaiveInstance::get_regression_values(
 	    }
 	}
     } else {  // basic variables: 4 possible cases
-	vector<int> dom_a_var = a.get_values(variable);
-	bool post_val_in_a = find(dom_a_var.begin(), dom_a_var.end(), post_val) != dom_a_var.end();
+	// vector<int> dom_a_var = a.get_values(variable);
+	// bool post_val_in_a = find(dom_a_var.begin(), dom_a_var.end(), post_val) != dom_a_var.end();
+        bool post_val_in_a = (post_val != UNDEFINED) && a.test(variable, post_val);
 	if (post_val == UNDEFINED) {  // no effect, no precondition
-	    result = dom_a_var; // regression is the current domain of var in a
+	    // result = dom_a_var;
+	    result = a.get_values(variable); // regression is the current domain of var in a
 	} else if (post_val != UNDEFINED && !post_val_in_a) { // effect not contained in a
 	    // regression is empty, a is unreachable via o
 	} else if (pre_val != UNDEFINED && post_val_in_a) { // precondition, postcondition in a
