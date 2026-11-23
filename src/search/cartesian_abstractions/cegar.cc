@@ -72,9 +72,9 @@ CEGAR::CEGAR(
             || pick_split == PickSplit::MIN_HADD || pick_split == PickSplit::MAX_HADD
             || tiebreak_split == PickSplit::MAX_CG || tiebreak_split == PickSplit::MIN_CG
             || tiebreak_split == PickSplit::MIN_HADD || tiebreak_split == PickSplit::MAX_HADD) {
-            log << "The split selectors min_cg and max_cg are not "
-               "supported for tasks with axioms. Please choose another "
-               "pick_split/tiebreak_split strategy." << endl;
+            log << "The split selectors min_hadd, max_hadd, min_cg and max_cg "
+                   "are not supported for tasks with axioms. Please choose "
+                   "another pick_split/tiebreak_split strategy." << endl;
             utils::exit_with(utils::ExitCode::SEARCH_INPUT_ERROR);
         }
     }

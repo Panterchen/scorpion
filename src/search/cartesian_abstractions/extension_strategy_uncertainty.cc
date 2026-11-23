@@ -1,6 +1,9 @@
 #include "extension_strategy_uncertainty.h"
+
 #include "cartesian_set.h"
+
 #include "../plugins/plugin.h"
+#include "../task_utils/task_properties.h"
 
 #include <algorithm>
 #include <cassert>
@@ -15,8 +18,13 @@ namespace cartesian_abstractions {
 // ---- ExtensionStrategyUncertaintyInstance ----
 
 ExtensionStrategyUncertaintyInstance::ExtensionStrategyUncertaintyInstance(
-    const AxiomsProxy &axioms, const VariablesProxy &variables)
-    : axioms(axioms), variables(variables), var_helper(variables) {
+    const TaskProxy &task_proxy)
+    // const AxiomsProxy &axioms, const VariablesProxy &variables)
+    :   axioms(task_proxy.get_axioms()),
+        axiom_evaluator(AxiomEvaluator(task_proxy)),
+        variables(task_proxy.get_variables()),
+        var_helper(variables),
+        var_deps(VariableDependencies(task_proxy)) {
     int num_vars = variables.size();
     int num_axioms = axioms.size();
     int num_facts = var_helper.num_facts();
@@ -45,6 +53,11 @@ ExtensionStrategyUncertaintyInstance::ExtensionStrategyUncertaintyInstance(
         sort(fact_ids.begin(), fact_ids.end());
         fact_ids.erase(unique(fact_ids.begin(), fact_ids.end()), fact_ids.end());
         body_size[id] = fact_ids.size();
+
+        if (fact_ids.empty()) {
+            empty_body_heads.push_back(axiom_head[id]);
+        }
+
         for (int f : fact_ids) {
             watches.emplace_back(f, id);
         }
@@ -107,6 +120,14 @@ CartesianSet ExtensionStrategyUncertaintyInstance::compute_extension(
     // Initialize queue with facts known to be true/false
     deque<pair<FactPair, bool>> fact_queue = setup_fact_queue(a);
 
+    for (const FactPair &head : empty_body_heads) {
+        result.remove(head.var, default_value[head.var]);
+        if (result.count(head.var) == 0) {
+            return result; // conflict, empty domain for derived variable
+        }
+        enqueue(fact_queue, head, true);
+    }
+
     while (!fact_queue.empty()) {
         FactPair fact = fact_queue.front().first;
         bool flag = fact_queue.front().second;
@@ -155,6 +176,13 @@ int ExtensionStrategyUncertaintyInstance::compute_extension_value(
 
     // Initialize queue with facts known to be true/false in abstract state a
     deque<pair<FactPair, bool>> fact_queue = setup_fact_queue(a);
+
+    for (const FactPair &head : empty_body_heads) {
+        if (head.var == var) {
+            return head.value;
+        }
+        enqueue(fact_queue, head, true);
+    }
 
     while (!fact_queue.empty()) {
         FactPair fact = fact_queue.front().first;
@@ -260,6 +288,51 @@ int ExtensionStrategyUncertaintyInstance::get_extension_value(
     return fast;
 }
 
+CartesianSet ExtensionStrategyUncertaintyInstance::get_precise_extension(const CartesianSet &a) {
+    CartesianSet result = get_extension(a);
+    for (int d : var_helper.derived_vars) {
+        if (result.count(d) == 0) {
+            return result; // us extension found inconsistency
+        }
+    }
+
+    // fix concrete valuation for every variable in result
+    vector<int> vals(result.get_num_variables());
+    for (int v : var_helper.basic_vars) {
+        vals[v] = result.get_values(v)[0];
+    }
+    for (int d : var_helper.derived_vars) {
+        vals[d] = default_value[d];
+    }
+
+    axiom_evaluator.evaluate(vals);
+
+    for (int d : var_helper.derived_vars) {
+        // vector<AxiomSplitTarget> axs = var_deps.get_basic_targets(d,
+        //     (1-default_value[d]), true);
+        vector<int> sup = var_deps.get_basic_dependencies(d);
+        // for (AxiomSplitTarget ax : axs) {
+        //     sup.push_back(ax.fact.var);
+        // }
+        bool singleton = true;
+        for (int b : sup) {
+            if (a.count(b) > 1) {
+                singleton = false;
+                break;
+            }
+        }
+        if (!singleton) {
+            continue;
+        }
+        if (!result.test(d, vals[d])) {
+            result.remove_all(d);
+            return result;
+        }
+        result.set_single_value(d, vals[d]);
+    }
+    return result;
+}
+
 // ---- Original implementation, only compiled for verification ----
 #ifdef VERIFY_EXTENSION
 
@@ -286,6 +359,14 @@ CartesianSet ExtensionStrategyUncertaintyInstance::get_extension_old(
     
     // variables already seen (added to queue)
     vector<bool> seen_vars(variables.size(), false);
+
+    for (const FactPair &head : empty_body_heads) {
+        result.remove(head.var, variables[head.var].get_default_axiom_value());
+        if (result.count(head.var) == 0) {
+            return result;
+        }
+        enqueue_old(fact_queue, seen_vars, head, true);
+    }
 
     while (!fact_queue.empty()) {
         FactPair fact = fact_queue.front().first;
@@ -362,7 +443,14 @@ int ExtensionStrategyUncertaintyInstance::get_extension_value_old(
     std::deque<std::pair<FactPair, bool>> fact_queue = setup_fact_queue(a);
     // variables already seen (added to queue)
     vector<bool> seen_vars(variables.size(), false); 
-   
+
+    for (const FactPair &head : empty_body_heads) {
+        if (head.var == var) {
+            return head.value;
+        }
+        enqueue_old(fact_queue, seen_vars, head, true);
+    }
+
     while (!fact_queue.empty()) {
         FactPair fact = fact_queue.front().first;
         bool flag = fact_queue.front().second;
@@ -472,8 +560,8 @@ ExtensionStrategyUncertainty::ExtensionStrategyUncertainty(utils::Verbosity verb
 
 unique_ptr<ExtensionStrategyInstance> ExtensionStrategyUncertainty::create(
     const TaskProxy &task_proxy) const {
-    return make_unique<ExtensionStrategyUncertaintyInstance>(
-        task_proxy.get_axioms(), task_proxy.get_variables());
+    return make_unique<ExtensionStrategyUncertaintyInstance>(task_proxy);
+        // task_proxy.get_axioms(), task_proxy.get_variables());
 }
 
 string ExtensionStrategyUncertainty::name() const {

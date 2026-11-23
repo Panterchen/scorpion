@@ -4,6 +4,7 @@
 #include "extension_strategy.h"
 #include "types.h"
 #include "utils.h"
+#include "../axioms.h"
 
 #include "../utils/collections.h"
 
@@ -29,10 +30,14 @@ namespace cartesian_abstractions {
 
 class ExtensionStrategyUncertaintyInstance : public ExtensionStrategyInstance {
     const AxiomsProxy axioms;
+    AxiomEvaluator axiom_evaluator;
     const VariablesProxy variables;
     const VariableHelper var_helper;
+    const VariableDependencies var_deps;
 
     std::vector<FactPair> axiom_head;      // per Axiom (Head-Fact)
+    std::vector<FactPair> empty_body_heads; // Axioms with empty bodys (always
+                                            // default value)
     std::vector<int> body_size;            // per Axiom, no-duplicate fact-count
     std::vector<int> supporting_base;      // per var: count axiom with head-var
     std::vector<int> default_value;        // per var: only for derived, else -1
@@ -67,11 +72,13 @@ private:
 
 
 public:
-    ExtensionStrategyUncertaintyInstance(const AxiomsProxy &axioms,
-        const VariablesProxy &variables);
+    ExtensionStrategyUncertaintyInstance(const TaskProxy &task_proxy);
+        // const AxiomsProxy &axioms,
+        // const VariablesProxy &variables);
     virtual ~ExtensionStrategyUncertaintyInstance() override = default;
     virtual CartesianSet get_extension(const CartesianSet &a) override;
     virtual int get_extension_value(const CartesianSet &a, int variable) override;
+    virtual CartesianSet get_precise_extension(const CartesianSet &a) override;
 };
 
 /*
@@ -87,6 +94,9 @@ public:
     virtual ~ExtensionStrategyUncertainty() override = default;
     virtual std::unique_ptr<ExtensionStrategyInstance> create(
         const TaskProxy &task_proxy) const override;
+    virtual bool supports_precise_checks() const override {
+        return true;
+    }
 };
 }
 
